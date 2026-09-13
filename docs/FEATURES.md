@@ -1,0 +1,112 @@
+# Implemented vs planned
+
+Status as of this build. Anything marked **Not implemented** does nothing and
+says so in the application — no placeholder that looks functional.
+
+## Implemented
+
+### ROM handling
+- [x] Open `.z64`, `.v64`, `.n64` (and word-swapped) images; byte order detected
+      from the header magic, not the file extension
+- [x] Converted to big endian internally; can be saved back in any order
+- [x] N64 header parsing: internal name, game code, region, media, revision,
+      boot address, libultra release, CRC1/CRC2
+- [x] Advisory validation — refuses non-ROMs, warns about (but still opens)
+      odd sizes, unknown boot code, mismatched checksums
+- [x] N64 boot checksum (CRC1/CRC2) calculation and CIC chip detection;
+      recalculated on save so modified ROMs boot on real hardware
+- [x] Original file opened read-only and never written to; **Save ROM As**
+      refuses to overwrite the file that was loaded
+- [x] Automatic backup offer on load, SHA-1 indexed so duplicates are skipped;
+      restore and prune
+- [x] Modification summary before saving
+- [x] Recent ROMs list
+
+### Hex / Data Explorer
+- [x] Virtualised hex/ASCII view — only visible rows are formatted, so a
+      64 MiB ROM scrolls as fast as a 512 KiB one
+- [x] Nibble-accurate hex typing, ASCII typing, selection, keyboard navigation
+- [x] Live data inspector: `u8`…`s32` and `f32` in both byte orders, bits, text
+- [x] Modified bytes, bookmarks and search hits highlighted
+- [x] Go to address, find bytes or text, copy/paste hex, fill selection,
+      revert selection to original
+- [x] Configurable bytes per row, font size, hex case
+
+### Search and analysis
+- [x] Exact-value and range search for `u8`…`s32` and `f32`, either byte order,
+      with alignment control
+- [x] Text search, case sensitive or insensitive
+- [x] Hex byte search, and masked search with wildcards (`DE ?? BE EF`)
+- [x] Printable-string listing
+- [x] Iterative narrowing: keep addresses that stayed the same, changed,
+      increased, decreased, or equal a value
+- [x] ROM Scanner — structural survey of an unknown image
+- [x] Pointer Finder — candidate references as raw offsets, KSEG0 addresses,
+      or relative to a load base
+
+### ROM comparison
+- [x] Byte-for-byte diff of two files, or of the working copy against the
+      loaded image
+- [x] Byte orders normalised first, so `.v64` vs `.z64` of the same cartridge
+      compares as identical
+- [x] Configurable region merging, structural labelling, length filtering
+- [x] Each difference decoded as every type that fits, with before/after/delta
+- [x] Bookmark a difference in one click; export CSV or JSON
+
+### Bookmarks and research
+- [x] Named, typed, categorised bookmarks with defaults, ranges, confidence
+      levels and notes, scoped to the ROM build they were found in
+- [x] JSON storage, idempotent import/export, CSV export
+- [x] **Promote to game definition** — turns a bookmark into a working editor
+      control with no code changes
+- [x] Research Mode: experiments recording address, before/after values,
+      hypothesis, result and outcome; Markdown and CSV export
+
+### Editing
+- [x] Address database: every editor reads addresses from JSON definitions
+- [x] Gameplay Values / Physics & Movement / Passing & Ball Physics —
+      sliders and numeric entry driven entirely by the loaded ROM's definition,
+      with scaling, units, per-value and bulk **Restore defaults**
+- [x] Undiscovered values render as labelled, inactive rows rather than being
+      hidden
+- [x] Team Editor — form generated from the definition's team table; text,
+      numeric, enum and colour (RGBA5551 / RGBA8888) fields; CSV import/export
+- [x] Roster Editor — spreadsheet over the player table, inline editing, team
+      filtering, bulk adjust and bulk set, move between teams, revert selected,
+      CSV import/export
+- [x] Undo/redo across every editor, with bulk operations collapsing to one
+      step and failed imports rolling back completely
+- [x] Revert a range, a record, or the whole ROM
+
+### Patches
+- [x] BPS creation and application, with source/target/patch CRC32
+      verification and embedded name/version/author/description
+- [x] IPS creation and application, including RLE records and the truncate
+      extension; refuses rather than writing an unrepresentable patch, and
+      writes metadata to a sidecar `.json`
+- [x] Patch inspection, change estimation, and in-place application to the
+      working copy as a single undoable step
+
+### Other
+- [x] Dark themed PySide6 interface with sidebar navigation and full menus
+- [x] Settings persisted outside the installation directory
+- [x] Synthetic demo cartridge generator so every editor can be exercised
+      without a real ROM
+- [x] 206 unit and headless-UI tests
+
+## Not implemented
+
+- [ ] **Any verified NFL Blitz address.** The four shipped Blitz definitions
+      are stubs; every entry is marked `undiscovered`. This is deliberate.
+- [ ] **Graphics Editor.** Texture locations and formats in NFL Blitz are
+      unknown, and N64 titles often store graphics inside compressed archives
+      rather than at fixed addresses. The page states what it needs first.
+- [ ] Texture decoding/encoding (RGBA16, RGBA32, IA4/8/16, I4/8, CI4/CI8) —
+      the codec is planned but pointless before assets are located
+- [ ] Adding new teams or players beyond the existing table size (would
+      require relocating tables and fixing up pointers)
+- [ ] Live emulator memory watching
+- [ ] Audio and menu editing
+- [ ] Support for the arcade or PlayStation versions
+
+See [ROADMAP.md](ROADMAP.md) for how the gaps get closed.

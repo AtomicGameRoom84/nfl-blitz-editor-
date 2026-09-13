@@ -1,1 +1,154 @@
-# nfl-blitz-editor-
+# NFL Blitz Mod Suite
+
+A desktop ROM-hacking workbench for the Nintendo 64 version of **NFL Blitz**,
+built with Python and PySide6.
+
+Load a legally obtained cartridge dump, explore and edit it without touching
+hex by hand, and share your work as an IPS or BPS patch.
+
+> **The suite ships no game data and no unverified ROM addresses.**
+> Nobody has publicly reverse engineered NFL Blitz's N64 data layout, so the
+> Team, Roster and Graphics editors correctly report themselves *unavailable*
+> until a game definition describes where that data lives. Finding it is what
+> the ROM Comparison, Value Search, Bookmark and Research tools are for —
+> and once you find something, promoting a bookmark into a definition turns it
+> into a labelled slider with no code changes.
+> See [docs/DISCOVERING_ADDRESSES.md](docs/DISCOVERING_ADDRESSES.md).
+
+---
+
+## Running it
+
+Requires Python 3.10 or newer.
+
+```bash
+pip install -r requirements.txt
+python main.py
+```
+
+You can also pass a ROM on the command line:
+
+```bash
+python main.py /path/to/your/nfl-blitz.z64
+```
+
+### Try it without a ROM
+
+The repository includes a synthetic demo cartridge generator. It is **not**
+NFL Blitz and contains no copyrighted data — it is a structurally valid N64
+image built from `games/demo_rom.json` so every editor can be exercised:
+
+```bash
+python tools/make_demo_rom.py demo.z64
+python main.py demo.z64
+```
+
+Open the Team, Roster and Gameplay editors and they work end to end, because
+the demo definition genuinely describes where its data lives. That is exactly
+what an NFL Blitz definition will look like once its addresses are found.
+
+### Tests
+
+```bash
+pip install pytest
+python -m pytest
+```
+
+The Qt smoke tests run headless (`QT_QPA_PLATFORM=offscreen`) and skip
+themselves if PySide6 cannot start.
+
+---
+
+## Project layout
+
+```
+main.py                     Application entry point
+pyproject.toml              Packaging and pytest configuration
+
+core/                       No Qt imports — all independently testable
+  byte_order.py             .z64 / .v64 / .n64 detection and conversion
+  rom_header.py             The 64-byte N64 cartridge header
+  rom_validator.py          Advisory validation with warnings
+  crc.py                    N64 boot checksum (CRC1/CRC2) and CIC detection
+  identity.py               Fingerprinting one specific ROM image
+  datatypes.py              Typed views over raw bytes, number parsing
+  undo.py                   Command stack, transactions, dirty tracking
+  rom_manager.py            The working copy and every edit made to it
+  backup.py                 Timestamped backups of original ROMs
+  address_db.py             Game definitions: addresses live in data, not code
+  bookmarks.py              The address bookmark database
+  patch.py                  IPS and BPS creation and application
+  paths.py, settings.py     User data locations and preferences
+
+editors/                    Editor logic, still no Qt
+  base.py                   The availability contract
+  table_editor.py           Generic fixed-stride record table editor
+  team_editor.py            Teams (colours, names) on top of TableEditor
+  roster_editor.py          Players (bulk edits, team moves) on top of it
+  gameplay_editor.py        Scalar constants driven by the address database
+  graphics_editor.py        Not implemented — states what it needs first
+
+tools/                      Research and analysis, no Qt
+  comparator.py             Binary diffing between two ROMs
+  search.py                 Value, range, text, pattern and masked search
+  scanner.py                Structural survey of an unknown ROM
+  pointer_finder.py         Candidate references to an address
+  research.py               The experiment log (Research Mode)
+  make_demo_rom.py          Builds the synthetic demo cartridge
+
+ui/                         Everything Qt
+  theme.py                  Dark palette and stylesheet
+  app_state.py              Shared state; bridges core callbacks to signals
+  main_window.py            Sidebar, menus, save workflow
+  widgets/                  Hex view, data inspector, value row
+  pages/                    One module per sidebar page
+  dialogs/                  Bookmark, scanner, pointer finder, save summary
+
+games/                      Game definition files (data, not code)
+  demo_rom.json             Fully populated — describes the demo cartridge
+  nfl_blitz_1997.json       Stub: every address marked "undiscovered"
+  nfl_blitz_2000.json       Stub
+  nfl_blitz_2001.json       Stub
+  nfl_blitz_special_edition.json   Stub
+
+docs/                       Architecture, discovery guide, roadmap, features
+tests/                      206 tests covering core, tools, editors and UI
+```
+
+Your bookmarks, research notes, settings, backups and edited game definitions
+live in your user data directory, never in this folder:
+
+| Platform | Location |
+| --- | --- |
+| Windows | `%APPDATA%\NFLBlitzModSuite` |
+| macOS | `~/Library/Application Support/NFLBlitzModSuite` |
+| Linux | `~/.local/share/NFLBlitzModSuite` |
+
+Override it with the `NFL_BLITZ_SUITE_HOME` environment variable.
+
+---
+
+## Documentation
+
+| Document | What it covers |
+| --- | --- |
+| [docs/FEATURES.md](docs/FEATURES.md) | What works today versus what is planned |
+| [docs/DISCOVERING_ADDRESSES.md](docs/DISCOVERING_ADDRESSES.md) | How to find the addresses this suite does not yet know |
+| [docs/GAME_DEFINITIONS.md](docs/GAME_DEFINITIONS.md) | The definition file format, field by field |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How the layers fit together and why |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | Phases, and the plan for reverse engineering the rest |
+
+---
+
+## Legal
+
+You must supply your own ROM, dumped from a cartridge you own. This project
+contains no game data, distributes no ROMs, and includes no tools for
+obtaining one.
+
+Share modifications as **patches** (IPS/BPS), never as ROM files. A patch
+contains only your changes; the person applying it supplies their own dump.
+The Patch Builder is built around that rule.
+
+NFL Blitz is a trademark of its respective owners. This project is
+unaffiliated fan tooling.

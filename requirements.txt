@@ -1,0 +1,7 @@
+# Runtime dependencies for the NFL Blitz Mod Suite.
+PySide6>=6.5
+numpy>=1.24
+Pillow>=10.0
+
+# Development / tests
+pytest>=7.0
