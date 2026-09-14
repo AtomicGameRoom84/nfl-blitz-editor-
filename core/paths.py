@@ -11,13 +11,31 @@ suite uses to keep runs hermetic.
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 APP_NAME = "NFLBlitzModSuite"
 ENV_OVERRIDE = "NFL_BLITZ_SUITE_HOME"
 
+
+def _project_root() -> Path:
+    """Where the application's own read-only files live.
+
+    Under PyInstaller the source tree does not exist on disk: bundled data is
+    unpacked into ``sys._MEIPASS`` (one-file builds) or sits beside the
+    executable (one-folder builds). Resolving this correctly is what lets a
+    frozen build find the shipped game definitions.
+    """
+    if getattr(sys, "frozen", False):
+        bundled = getattr(sys, "_MEIPASS", None)
+        if bundled:
+            return Path(bundled)
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent.parent
+
+
 #: Directory of the installed/checked-out application.
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = _project_root()
 
 #: Game definition files shipped with the application (read only).
 BUILTIN_GAMES_DIR = PROJECT_ROOT / "games"

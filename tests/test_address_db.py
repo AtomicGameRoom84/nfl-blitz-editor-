@@ -45,7 +45,13 @@ def test_discovered_tables_are_backed_by_a_real_dump(builtin_games_dir):
 
     This is what stops a plausible-looking guess being shipped: to mark a
     table discovered you must also have recorded the SHA-1 or boot CRC of the
-    dump you verified it against.
+    dump you verified it against, and you must write down how you know.
+
+    "Located" and "understood" are different claims. A table whose position is
+    certain but whose meaning is not is allowed, at confidence
+    ``experimental`` -- but then its notes have to say so out loud, because
+    that caveat is the only thing standing between a user and a wrong
+    assumption.
     """
     database = AddressDatabase(builtin_dir=builtin_games_dir).load_all()
     for definition in database.all():
@@ -62,8 +68,46 @@ def test_discovered_tables_are_backed_by_a_real_dump(builtin_games_dir):
             "no verified ROM fingerprint"
         )
         for table in located:
-            assert table.confidence == "confirmed"
+            assert table.confidence in ("confirmed", "experimental"), (
+                f"{definition.id}:{table.id} claims {table.confidence!r}"
+            )
             assert table.notes.strip(), f"{definition.id}:{table.id} needs notes"
+            if table.confidence == "experimental":
+                lowered = table.notes.lower()
+                assert "unknown" in lowered or "unconfirmed" in lowered, (
+                    f"{definition.id}:{table.id} is experimental but its notes "
+                    "do not say what is uncertain"
+                )
+
+
+def test_ram_codes_are_labelled_as_runtime_not_rom(builtin_games_dir):
+    """Catalogued RAM addresses must never be mistaken for ROM offsets."""
+    database = AddressDatabase(builtin_dir=builtin_games_dir).load_all()
+    for definition in database.all():
+        for code in definition.ram_codes:
+            assert 0x80000000 <= code.address <= 0x807FFFFF, (
+                f"{definition.id}:{code.id} is not a KSEG0 RDRAM address"
+            )
+            assert code.width in (1, 2)
+            # Community-sourced addresses must say where they came from.
+            assert code.source.strip(), f"{definition.id}:{code.id} has no source"
+            assert code.confidence != "confirmed" or "verified" in code.source.lower()
+
+
+def test_blitz_ram_map_is_range_limited(builtin_games_dir):
+    """The verified RAM window must not be presented as a ROM-wide delta."""
+    definition = AddressDatabase(builtin_dir=builtin_games_dir).load_all().get(
+        "nfl_blitz_1997"
+    )
+    assert len(definition.ram_map) == 1
+    window = definition.ram_map[0]
+    assert window.delta == 0x80241368
+    assert window.confidence == "confirmed"
+    # It must cover the roster blocks and nothing more.
+    assert window.contains(0x802DE3D8)      # roster block 0
+    assert window.contains(0x802E8A98)      # roster block 29
+    assert not window.contains(0x802997E3)  # a cheat flag, which is not mapped
+    assert "only range" in window.note.lower() or "ONLY range" in window.note
 
 
 def test_unmapped_blitz_versions_stay_empty(builtin_games_dir):

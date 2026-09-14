@@ -21,13 +21,25 @@ Addresses below are **ROM file offsets** in the big endian image.
 ## RAM ↔ ROM mapping
 
 ```
+RAM 0x802DE3D8 .. 0x802E9058   ->   ROM 0x09D070 .. 0x0A7CF0
 rom_offset = ram_address - 0x80241368
-ram_address = rom_offset + 0x80241368
 ```
 
 Derived from the 30 roster pointers in the team table and confirmed against
-all 30 — each one resolves exactly onto its own player block. Use it with the
-Pointer Finder's *load base* field when chasing references.
+all 30 — each one resolves exactly onto its own player block.
+
+**This range only.** An attempt to extend the delta ROM-wide, by counting how
+many KSEG0 pointers land exactly on the start of a NUL-terminated string, did
+not support it: neighbouring deltas scored *higher* (363 and 317 string hits
+against 278 for the verified delta) and several pointers landed mid-string —
+`'orkmain'` where `'workmain'` was expected. That is what multiple segments
+loaded to different addresses look like. No second independent anchor exists
+in the ROM: searching for a pointer to the team table or to the upper-case
+city table finds nothing.
+
+So the definition records one range, and the GameShark converter refuses
+addresses outside it rather than guessing. Finding the game's DMA/segment
+table is the work that would extend this.
 
 ## Team table — `0x000A7CD8`
 
@@ -123,6 +135,35 @@ Slot layout per team: 0–2 offensive line, 3 quarterback, 4–6 skill players,
 30 records × `0x10` bytes, same order, used where the game needs a short
 all-caps name. Three entries differ from the team table's city field:
 `N.Y. GIANTS`, `N.Y. JETS` and `SAN FRAN.`.
+
+## Cheat string pool — `0x00065B80`
+
+The names of all 45 VS-screen cheats, as NUL-terminated, 4-byte-aligned ASCII:
+`NO HEAD`, `WEATHER: CLEAR`, `SUPER FIELD GOALS`, `FAST PASSES`, `HYPER
+BLITZ`, `TOURNAMENT MODE`, `BIG FOOTBALL` and the rest, plus four
+parenthetical notes such as `(IN A 2 PLAYER GAME)`.
+
+The corresponding runtime flags live in a 4-byte-spaced array around
+`0x80299753`–`0x80299803` in RAM. The pool order and the array order are
+*close* but not identical — several published addresses are off by a slot from
+a straight descending fit — so no 1:1 index mapping is claimed here. The
+addresses in the definition come from the GameShark Pro device database
+instead; the pool corroborates that the game really does have cheats by those
+names.
+
+These are runtime flags, not ROM data: in normal play the game sets them when
+you enter a code on the VS screen.
+
+## Per-team float table — `0x00065E94`
+
+Exactly 30 big-endian floats, ending at `0x00065F0C`. Values run 59.4 to
+108.4 (Oakland lowest; San Francisco and Tampa Bay highest). Thirty entries in
+a thirty-team game, immediately after the cheat string pool and the
+`vs_unhd` / `vs_sprk` VS-screen asset names.
+
+**What they control is unknown.** The position in the file suggests something
+VS-screen related rather than gameplay. Exposed in the Team Editor so it can
+be experimented with.
 
 ## Still unmapped
 

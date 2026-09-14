@@ -10,7 +10,10 @@ from __future__ import annotations
 
 from typing import Dict, List, Tuple
 
+from PySide6.QtCore import Qt
+
 from PySide6.QtWidgets import (
+    QApplication,
     QHBoxLayout,
     QLabel,
     QMessageBox,
@@ -22,6 +25,8 @@ from PySide6.QtWidgets import (
 from core.address_db import ValueEntry
 from editors.base import Availability
 from editors.gameplay_editor import GameplayEditor
+from tools.gameshark import float_high_half, make_code
+from ui import theme
 from ui.pages.base_page import Page, UnavailableBanner, card, hint
 
 
@@ -50,6 +55,11 @@ class GameplayPage(Page):
         self._groups_layout.setContentsMargins(0, 0, 0, 0)
         self._groups_layout.setSpacing(12)
         self.body.addWidget(self._groups_container)
+
+        # Runtime codes: things this section can change *right now* in an
+        # emulator, even though no ROM address for them is known.
+        self._runtime_card, self._runtime_layout = card("RUNTIME CODES FOR THIS SECTION")
+        self.body.addWidget(self._runtime_card)
 
         self._actions = QWidget()
         actions_layout = QHBoxLayout(self._actions)
@@ -136,7 +146,78 @@ class GameplayPage(Page):
                     layout.addWidget(row)
                 self._groups_layout.addWidget(frame)
 
+        self._rebuild_runtime_codes()
         self.refresh_values()
+
+    def _rebuild_runtime_codes(self) -> None:
+        """List the catalogued RAM addresses that belong to this page."""
+        while self._runtime_layout.count() > 1:      # keep the heading
+            item = self._runtime_layout.takeAt(1)
+            widget = item.widget()
+            if widget is not None:
+                widget.setParent(None)
+                widget.deleteLater()
+
+        definition = self.state.definition
+        codes = []
+        if definition is not None:
+            for category in self.categories:
+                codes.extend(definition.ram_codes_in(category))
+        self._runtime_codes = codes
+        self._runtime_card.setVisible(bool(codes))
+        if not codes:
+            return
+
+        self._runtime_layout.addWidget(
+            hint(
+                "These are runtime (RAM) addresses, not ROM offsets \u2014 so they "
+                "cannot be baked into a saved ROM, but they work today in an "
+                "emulator or on a GameShark. Copy the codes and paste them in."
+            )
+        )
+        for entry in codes:
+            row = QWidget()
+            layout = QHBoxLayout(row)
+            layout.setContentsMargins(0, 2, 0, 2)
+            name = QLabel(entry.name)
+            name.setMinimumWidth(230)
+            layout.addWidget(name)
+            value = int(entry.default if entry.default is not None else 1) or 1
+            raw = float_high_half(float(value)) if entry.float_high_half else value
+            code_text = make_code(entry.address, raw, entry.width).format()
+            code_label = QLabel(code_text)
+            code_label.setFont(theme.monospace_font(11))
+            code_label.setStyleSheet(f"color: {theme.COLORS['accent']};")
+            code_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+            layout.addWidget(code_label)
+            badge = QLabel(entry.confidence)
+            badge.setObjectName("Hint")
+            layout.addWidget(badge)
+            layout.addStretch(1)
+            self._runtime_layout.addWidget(row)
+
+        buttons = QWidget()
+        button_row = QHBoxLayout(buttons)
+        button_row.setContentsMargins(0, 6, 0, 0)
+        copy_all = QPushButton("Copy these codes")
+        copy_all.clicked.connect(self._copy_runtime_codes)
+        button_row.addWidget(copy_all)
+        open_page = QPushButton("Open the GameShark page")
+        open_page.clicked.connect(lambda: self.state.navigate("gameshark"))
+        button_row.addWidget(open_page)
+        button_row.addStretch(1)
+        self._runtime_layout.addWidget(buttons)
+
+    def _copy_runtime_codes(self) -> None:
+        lines = []
+        for entry in getattr(self, "_runtime_codes", []):
+            value = int(entry.default if entry.default is not None else 1) or 1
+            raw = float_high_half(float(value)) if entry.float_high_half else value
+            lines.append(f"{make_code(entry.address, raw, entry.width).format()}  ; {entry.name}")
+        if not lines:
+            return
+        QApplication.clipboard().setText("\n".join(lines))
+        self.state.status(f"Copied {len(lines)} GameShark code(s).", 4000)
 
     def refresh_values(self) -> None:
         if not self._rows:

@@ -100,6 +100,29 @@ says so in the application — no placeholder that looks functional.
 - [x] Positional team membership (16 players per block, no team field)
 - [x] Full details in [NFL_BLITZ_USA_MAP.md](NFL_BLITZ_USA_MAP.md)
 
+### GameShark codes
+- [x] Parse and explain N64 codes: `80`/`81`/`A0`/`A1` writes, `88`/`89` button
+      writes, `F0`/`F1` boot writes, `D0`–`D3` conditionals, `50` repeater and
+      the device directives; unknown types are reported, never guessed
+- [x] Generate codes from catalogued runtime addresses, including the
+      upper-halfword float form published codes use
+- [x] Convert codes to permanent ROM edits **only** where the address falls in
+      a verified RAM-to-ROM range, applied as one undoable step
+- [x] Say exactly why a code could not be converted
+- [x] Bookmark convertible codes for follow-up research
+- [x] Read the code database out of a GameShark firmware dump you own
+- [x] NFL Blitz (USA) catalogue of 42 runtime addresses taken from the
+      GameShark Pro v3.3 device database, including Fast Passes and the
+      hidden-character roster
+
+### Packaging
+- [x] PyInstaller spec producing a single executable
+- [x] `packaging/build_windows.bat` and a cross-platform `packaging/build.py`
+- [x] GitHub Actions workflow building, testing and smoke-testing a Windows
+      `.exe` on a hosted runner, uploaded as an artifact and attached to tagged
+      releases
+- [x] `--self-test` mode that proves a frozen build finds its bundled data
+
 ### Other
 - [x] Dark themed PySide6 interface with sidebar navigation and full menus
 - [x] Settings persisted outside the installation directory
@@ -122,6 +145,8 @@ says so in the application — no placeholder that looks functional.
 - [ ] Adding new teams or players beyond the existing table size (would
       require relocating tables and fixing up pointers)
 - [ ] Live emulator memory watching
+- [ ] A verified RAM-to-ROM map beyond the roster region (only one range is
+      confirmed; the delta does not generalise)
 - [ ] Audio and menu editing
 - [ ] Support for the arcade or PlayStation versions
 

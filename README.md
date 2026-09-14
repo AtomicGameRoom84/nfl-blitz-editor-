@@ -23,7 +23,30 @@ hex by hand, and share your work as an IPS or BPS patch.
 
 ---
 
-## Running it
+## Windows executable
+
+A prebuilt `NFLBlitzModSuite.exe` is produced by CI on every push: open the
+repository's **Actions** tab, pick the latest *Windows build* run, and download
+the `NFLBlitzModSuite-windows` artifact. Tagged releases (`v*`) get the
+executable attached to the release too.
+
+To build it yourself on a Windows machine:
+
+```bat
+packaging\build_windows.bat
+```
+
+That installs the dependencies, runs the tests, and writes
+`dist\NFLBlitzModSuite.exe`. On any platform, `python packaging/build.py`
+does the same for that platform — PyInstaller does not cross-compile, so a
+Windows binary has to be built on Windows (which is what the CI workflow is
+for).
+
+`NFLBlitzModSuite.exe --self-test` starts the app headlessly and checks it can
+find its bundled game definitions; CI runs it against a generated demo ROM so
+a broken bundle fails the build rather than reaching a user.
+
+## Running from source
 
 Requires Python 3.10 or newer.
 
@@ -95,6 +118,8 @@ editors/                    Editor logic, still no Qt
   graphics_editor.py        Not implemented — states what it needs first
 
 tools/                      Research and analysis, no Qt
+  gameshark.py              N64 code parsing, generation, RAM->ROM conversion
+  gameshark_db.py           Reads the database inside a GameShark firmware dump
   comparator.py             Binary diffing between two ROMs
   search.py                 Value, range, text, pattern and masked search
   scanner.py                Structural survey of an unknown ROM
@@ -118,6 +143,8 @@ games/                      Game definition files (data, not code)
   nfl_blitz_2001.json       Stub
   nfl_blitz_special_edition.json   Stub
 
+packaging/                  PyInstaller spec and build scripts
+.github/workflows/          CI: builds and smoke-tests the Windows executable
 docs/                       Architecture, discovery guide, roadmap, features
 tests/                      206 tests covering core, tools, editors and UI
 ```
@@ -143,6 +170,7 @@ Override it with the `NFL_BLITZ_SUITE_HOME` environment variable.
 | [docs/FEATURES.md](docs/FEATURES.md) | What works today versus what is planned |
 | [docs/DISCOVERING_ADDRESSES.md](docs/DISCOVERING_ADDRESSES.md) | How to find the addresses this suite does not yet know |
 | [docs/GAME_DEFINITIONS.md](docs/GAME_DEFINITIONS.md) | The definition file format, field by field |
+| [docs/GAMESHARK_N64.md](docs/GAMESHARK_N64.md) | N64 GameShark code format, and why a code is usually not a ROM patch |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How the layers fit together and why |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Phases, and the plan for reverse engineering the rest |
 

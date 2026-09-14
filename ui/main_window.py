@@ -33,6 +33,7 @@ from ui.dialogs.common import (
 from ui.pages.bookmarks_page import BookmarksPage
 from ui.pages.compare_page import ComparePage
 from ui.pages.gameplay_page import GameplayValuesPage, MovementPage, PassingPage
+from ui.pages.gameshark_page import GameSharkPage
 from ui.pages.graphics_page import GraphicsEditorPage
 from ui.pages.hex_explorer_page import HexExplorerPage
 from ui.pages.patch_page import PatchPage
@@ -50,7 +51,8 @@ SECTIONS: Tuple[Tuple[str, Tuple[type, ...]], ...] = (
     ("ROM", (ROMManagerPage,)),
     ("EDITORS", (TeamEditorPage, RosterEditorPage, GraphicsEditorPage)),
     ("GAMEPLAY", (GameplayValuesPage, MovementPage, PassingPage)),
-    ("RESEARCH", (HexExplorerPage, SearchPage, BookmarksPage, ComparePage, ResearchPage)),
+    ("RESEARCH", (HexExplorerPage, SearchPage, BookmarksPage, ComparePage,
+                  GameSharkPage, ResearchPage)),
     ("OUTPUT", (PatchPage, SettingsPage)),
 )
 
@@ -158,6 +160,7 @@ class MainWindow(QMainWindow):
             tools_menu, "Pointer Finder…", self.run_pointer_finder
         )
         self._add_action(tools_menu, "Address Bookmarks", lambda: self.navigate("bookmarks"))
+        self._add_action(tools_menu, "GameShark Codes", lambda: self.navigate("gameshark"))
         tools_menu.addSeparator()
         self._add_action(tools_menu, "Research Mode", lambda: self.navigate("research"))
         self._add_action(
@@ -363,8 +366,10 @@ class MainWindow(QMainWindow):
         PointerFinderDialog(bytes(self.state.rom.data), target, self).exec()
 
     def show_documentation(self) -> None:
-        docs = Path(__file__).resolve().parent.parent / "docs"
-        readme = Path(__file__).resolve().parent.parent / "README.md"
+        from core import paths as core_paths
+
+        docs = core_paths.PROJECT_ROOT / "docs"
+        readme = core_paths.PROJECT_ROOT / "README.md"
         lines = [
             "Documentation lives in the project folder:",
             "",

@@ -127,6 +127,7 @@ step 1 considerably. It is the most likely next piece of work.
 
 | Item | Notes |
 | --- | --- |
+| Mapping more RAM segments | Only the roster/team window is verified. Finding the game's DMA table would give the rest, and would make far more GameShark codes convertible to ROM edits. |
 | Emulator memory watching | Read live RAM while the game runs, so values can be identified by watching them change during play. Needs an emulator with a debug API. |
 | Table relocation | Adding teams or players beyond the existing count means moving a table and fixing up everything that points at it. The Pointer Finder is the first half of this. |
 | Definition sharing | A simple import/merge flow for community definition files, with conflict reporting. |

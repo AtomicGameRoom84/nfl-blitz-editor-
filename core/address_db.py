@@ -290,6 +290,125 @@ class TableDefinition:
 
 
 @dataclass
+class RamRange:
+    """A RAM window known to be a verbatim copy of part of the ROM.
+
+    Kept as explicit ranges rather than one global delta: an N64 game loads
+    several segments to different addresses, and a single delta applied ROM
+    wide is how an address converter starts writing to the wrong place.
+    """
+
+    ram_start: int
+    ram_end: int          # exclusive
+    rom_start: int
+    confidence: str = "experimental"
+    note: str = ""
+
+    @property
+    def delta(self) -> int:
+        return self.ram_start - self.rom_start
+
+    @property
+    def length(self) -> int:
+        return self.ram_end - self.ram_start
+
+    def contains(self, ram_address: int) -> bool:
+        return self.ram_start <= ram_address < self.ram_end
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "ram_start": f"0x{self.ram_start:08X}",
+            "ram_end": f"0x{self.ram_end:08X}",
+            "rom_start": f"0x{self.rom_start:06X}",
+            "confidence": self.confidence,
+            "note": self.note,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Dict[str, Any]) -> "RamRange":
+        def as_int(value: Any) -> int:
+            return int(value, 0) if isinstance(value, str) else int(value)
+
+        return cls(
+            ram_start=as_int(payload["ram_start"]),
+            ram_end=as_int(payload["ram_end"]),
+            rom_start=as_int(payload["rom_start"]),
+            confidence=payload.get("confidence", "experimental"),
+            note=payload.get("note", ""),
+        )
+
+
+@dataclass
+class RamCode:
+    """A known *runtime* address: a cheat flag, a live counter, a physics value.
+
+    These are RAM addresses, not ROM offsets. They are what GameShark codes
+    target, and most of them have no ROM counterpart at all -- the value only
+    exists once the game is running. The suite can generate a code for one,
+    and can convert it to a ROM edit only when it falls inside a verified
+    :class:`RamRange`.
+    """
+
+    id: str
+    name: str
+    address: int
+    category: str = "misc"
+    width: int = 1                       # bytes a GameShark write would use
+    default: Optional[float] = None
+    minimum: Optional[float] = None
+    maximum: Optional[float] = None
+    #: Raw value -> label, for flags with a small set of meanings.
+    values: Dict[str, str] = field(default_factory=dict)
+    #: True when the value is a float and codes write its upper halfword.
+    float_high_half: bool = False
+    confidence: str = "experimental"
+    source: str = ""
+    notes: str = ""
+
+    @property
+    def address_hex(self) -> str:
+        return f"0x{self.address:08X}"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "address": f"0x{self.address:08X}",
+            "category": self.category,
+            "width": self.width,
+            "default": self.default,
+            "minimum": self.minimum,
+            "maximum": self.maximum,
+            "values": self.values,
+            "float_high_half": self.float_high_half,
+            "confidence": self.confidence,
+            "source": self.source,
+            "notes": self.notes,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Dict[str, Any]) -> "RamCode":
+        address = payload["address"]
+        if isinstance(address, str):
+            address = int(address, 0)
+        return cls(
+            id=payload["id"],
+            name=payload.get("name", payload["id"]),
+            address=int(address),
+            category=payload.get("category", "misc"),
+            width=int(payload.get("width", 1)),
+            default=payload.get("default"),
+            minimum=payload.get("minimum"),
+            maximum=payload.get("maximum"),
+            values=payload.get("values", {}) or {},
+            float_high_half=bool(payload.get("float_high_half", False)),
+            confidence=payload.get("confidence", "experimental"),
+            source=payload.get("source", ""),
+            notes=payload.get("notes", ""),
+        )
+
+
+@dataclass
 class Identification:
     """Rules for deciding whether a definition applies to a loaded ROM."""
 
@@ -352,6 +471,10 @@ class GameDefinition:
     identification: Identification = field(default_factory=Identification)
     entries: List[ValueEntry] = field(default_factory=list)
     tables: List[TableDefinition] = field(default_factory=list)
+    #: Verified RAM windows that mirror ROM content.
+    ram_map: List[RamRange] = field(default_factory=list)
+    #: Known runtime addresses, for GameShark codes and emulator work.
+    ram_codes: List[RamCode] = field(default_factory=list)
     source_path: Optional[Path] = None
     #: True when the file came from the user data directory.
     user_defined: bool = False
@@ -373,6 +496,22 @@ class GameDefinition:
             if item.id == table_id:
                 return item
         return None
+
+    def ram_code(self, code_id: str) -> Optional[RamCode]:
+        for item in self.ram_codes:
+            if item.id == code_id:
+                return item
+        return None
+
+    def ram_codes_in(self, category: str) -> List[RamCode]:
+        return [c for c in self.ram_codes if c.category == category]
+
+    def ram_code_categories(self) -> List[str]:
+        seen: List[str] = []
+        for code in self.ram_codes:
+            if code.category not in seen:
+                seen.append(code.category)
+        return seen
 
     def entries_in(self, category: str, discovered_only: bool = False) -> List[ValueEntry]:
         items = [e for e in self.entries if e.category == category]
@@ -482,6 +621,29 @@ class GameDefinition:
                     f"{entry.confidence!r}"
                 )
 
+        seen_ram = set()
+        for code in self.ram_codes:
+            if code.id in seen_ram:
+                problems.append(f"duplicate ram_code id {code.id!r}")
+            seen_ram.add(code.id)
+            if code.width not in (1, 2):
+                problems.append(
+                    f"ram_code {code.id!r}: width {code.width} is not a "
+                    "GameShark write size (1 or 2)"
+                )
+            if not (0x80000000 <= code.address <= 0x807FFFFF):
+                problems.append(
+                    f"ram_code {code.id!r}: 0x{code.address:08X} is not a KSEG0 "
+                    "RDRAM address"
+                )
+        for entry in self.ram_map:
+            if entry.ram_end <= entry.ram_start:
+                problems.append(
+                    f"ram_map range at 0x{entry.ram_start:08X} is empty or reversed"
+                )
+            if entry.rom_start < 0:
+                problems.append("ram_map range has a negative ROM start")
+
         seen_tables = set()
         for table in self.tables:
             if table.id in seen_tables:
@@ -534,6 +696,8 @@ class GameDefinition:
             "identification": self.identification.to_dict(),
             "entries": [e.to_dict() for e in self.entries],
             "tables": [t.to_dict() for t in self.tables],
+            "ram_map": [r.to_dict() for r in self.ram_map],
+            "ram_codes": [c.to_dict() for c in self.ram_codes],
             "updated": _now(),
         }
 
@@ -555,6 +719,8 @@ class GameDefinition:
             identification=Identification.from_dict(payload.get("identification", {})),
             entries=[ValueEntry.from_dict(e) for e in payload.get("entries", [])],
             tables=[TableDefinition.from_dict(t) for t in payload.get("tables", [])],
+            ram_map=[RamRange.from_dict(r) for r in payload.get("ram_map", [])],
+            ram_codes=[RamCode.from_dict(c) for c in payload.get("ram_codes", [])],
             source_path=source,
         )
 

@@ -17,3 +17,8 @@ demo.z64
 # Generated patches and exports
 *.ips
 *.bps
+
+# Build output
+build/
+dist/
+*.spec.bak
