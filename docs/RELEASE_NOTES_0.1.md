@@ -1,4 +1,21 @@
-# NFL Blitz Mod Suite 0.1.2 — preview
+# NFL Blitz Mod Suite 0.1.3 — preview
+
+## Fixed in 0.1.3
+
+Both found by extending the audit to the Tools menu, which nothing had been
+exercising.
+
+- **A mistyped address showed a Python error.** Every box that takes an
+  address or a value — Go To, Pointer Finder, search, bookmarks, 18 places in
+  all — reported `invalid literal for int() with base 10: 'x'`, which tells
+  you nothing about what to type instead. It now says what was rejected and
+  what is accepted: decimal, `0x`/`$` hex, or `0b` binary.
+- **The ROM Scanner looked hung.** Surveying a 16 MiB cartridge takes about
+  four seconds with the window frozen. It now shows a wait cursor.
+
+Audit: 51 checks, all passing. Unit tests: 284 passing.
+
+---
 
 ## Fixed in 0.1.2
 

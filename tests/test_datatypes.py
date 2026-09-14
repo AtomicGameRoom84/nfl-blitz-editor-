@@ -57,6 +57,21 @@ def test_parse_number_rejects_nonsense():
         parse_number("")
 
 
+@pytest.mark.parametrize("text", ["banana", "0xZZ", "0b12"])
+def test_parse_number_explains_itself(text):
+    """The message reaches the user verbatim in dialogs and status lines.
+
+    int()'s own "invalid literal for int() with base 10" told a person
+    nothing about what to type instead.
+    """
+    with pytest.raises(ValueError) as caught:
+        parse_number(text)
+    message = str(caught.value)
+    assert "invalid literal" not in message
+    assert text in message
+    assert "hex" in message and "0x" in message
+
+
 def test_parse_hex_bytes():
     assert parse_hex_bytes("DE AD BE EF") == b"\xde\xad\xbe\xef"
     assert parse_hex_bytes("de:ad-beef") == b"\xde\xad\xbe\xef"

@@ -215,14 +215,23 @@ def parse_number(text: str) -> int:
     negative = raw.startswith("-")
     if negative:
         raw = raw[1:]
-    if raw.startswith(("0x", "0X")):
-        value = int(raw[2:], 16)
-    elif raw.startswith("$"):
-        value = int(raw[1:], 16)
-    elif raw.startswith(("0b", "0B")):
-        value = int(raw[2:], 2)
-    else:
-        value = int(raw, 10)
+    try:
+        if raw.startswith(("0x", "0X")):
+            value = int(raw[2:], 16)
+        elif raw.startswith("$"):
+            value = int(raw[1:], 16)
+        elif raw.startswith(("0b", "0B")):
+            value = int(raw[2:], 2)
+        else:
+            value = int(raw, 10)
+    except ValueError as exc:
+        # int()'s own wording ("invalid literal for int() with base 10")
+        # ends up in dialogs and status lines, where it explains nothing.
+        # Say what was rejected and what would be accepted instead.
+        raise ValueError(
+            f"{text.strip()!r} is not a number. Use decimal (1234), "
+            "hex (0x4D2 or $4D2) or binary (0b10011010010)."
+        ) from exc
     return -value if negative else value
 
 

@@ -34,7 +34,9 @@ SCR = tempfile.mkdtemp(prefix="blitz-audit-")
 os.environ['QT_QPA_PLATFORM'] = os.environ.get('QT_QPA_PLATFORM', 'offscreen')
 # A private settings/bookmarks home, so an audit never disturbs real work.
 os.environ['NFL_BLITZ_SUITE_HOME'] = SCR + '/home'
-from PySide6.QtWidgets import QApplication, QMessageBox, QFileDialog, QInputDialog
+from PySide6.QtWidgets import (QApplication, QMessageBox, QFileDialog,
+                               QInputDialog, QPlainTextEdit)
+import time
 BOX=[]
 QMessageBox.critical    = staticmethod(lambda *a,**k: BOX.append(("ERROR", a[2] if len(a)>2 else '')))
 QMessageBox.information = staticmethod(lambda *a,**k: BOX.append(("INFO",  a[2] if len(a)>2 else '')))
@@ -385,7 +387,44 @@ def t_settings():
     return "persisted to disk"
 check("settings round trip", t_settings)
 
-print("\n== 15. EVERY PAGE STILL RENDERS ==", flush=True)
+print("\n== 15. DISCOVERY TOOLS (Tools menu) ==", flush=True)
+def t_scanner():
+    from ui.dialogs.common import ScannerDialog
+    t0 = time.perf_counter()
+    dlg = ScannerDialog(bytes(state.rom.data), win)
+    elapsed = time.perf_counter() - t0
+    text = dlg.findChild(QPlainTextEdit).toPlainText()
+    assert "ASCII" in text or "string" in text.lower(), text[:200]
+    dlg.close()
+    return f"{len(text.splitlines())} report lines in {elapsed:.1f}s"
+check("ROM Scanner surveys the real ROM", t_scanner)
+def t_pointers():
+    from ui.dialogs.common import PointerFinderDialog
+    # The roster block: the 30 team records hold pointers to it, so a correct
+    # finder must turn up candidates once told the RAM load base.
+    dlg = PointerFinderDialog(bytes(state.rom.data), 0x09D070, win)
+    dlg._base.setText("0x80241368")
+    t0 = time.perf_counter()
+    dlg.run_search(); app.processEvents()
+    elapsed = time.perf_counter() - t0
+    rows = dlg._table.rowCount()
+    assert rows > 0, "no candidate found for the known roster pointer"
+    found = {dlg._table.item(r,0).text() for r in range(rows)}
+    dlg.close()
+    return f"{rows} candidate(s) in {elapsed:.1f}s, first at {sorted(found)[0]}"
+check("Pointer Finder locates the known roster pointer", t_pointers)
+def t_pointers_bad_input():
+    from ui.dialogs.common import PointerFinderDialog
+    dlg = PointerFinderDialog(bytes(state.rom.data), 0, win)
+    dlg._target.setText("not a number")
+    dlg.run_search(); app.processEvents()
+    assert dlg._table.rowCount() == 0
+    assert dlg._status.text(), "a bad address gave no explanation"
+    msg = dlg._status.text(); dlg.close()
+    return f"explained: {msg[:48]}"
+check("Pointer Finder explains a bad address", t_pointers_bad_input)
+
+print("\n== 16. EVERY PAGE STILL RENDERS ==", flush=True)
 def t_pages():
     win.page("rom").load_rom(ROM)
     for k in list(win._pages): page(k)

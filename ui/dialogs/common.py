@@ -7,6 +7,7 @@ from typing import List
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QApplication,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -52,7 +53,13 @@ class ScannerDialog(TextReportDialog):
     """Runs :class:`~tools.scanner.ROMScanner` and shows the result."""
 
     def __init__(self, data: bytes, parent=None) -> None:
-        report = ROMScanner().scan(data)
+        # Surveying a 16 MiB cartridge takes a few seconds with the window
+        # unresponsive, so say so with the cursor rather than looking hung.
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            report = ROMScanner().scan(data)
+        finally:
+            QApplication.restoreOverrideCursor()
         super().__init__("ROM Scanner", report.lines(), parent)
 
 
