@@ -142,9 +142,15 @@ class PatchPage(Page):
         )
 
         self.state.romLoaded.connect(self._refresh_estimate)
-        self.state.romChanged.connect(lambda _r: self._refresh_estimate())
+        self.state.romChanged.connect(self._rom_changed)
 
     # -- helpers -----------------------------------------------------------
+
+    def _rom_changed(self, _ranges) -> None:
+        # Estimating a patch diffs the whole ROM. Only worth doing when the
+        # page is on screen; on_activated refreshes it when it appears.
+        if self.isVisible():
+            self._refresh_estimate()
 
     def on_activated(self) -> None:
         self._refresh_estimate()

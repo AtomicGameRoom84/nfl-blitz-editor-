@@ -9,6 +9,7 @@ Run with:
 from __future__ import annotations
 
 import sys
+from datetime import datetime
 from pathlib import Path
 
 # Allow running from anywhere without installing the package.
@@ -96,12 +97,58 @@ def self_test(rom_path: str | None = None) -> int:
     return status
 
 
+def install_crash_handler() -> None:
+    """Write unhandled exceptions to a log and tell the user where it is.
+
+    Without this a frozen, windowed build simply vanishes, which leaves a
+    bug report with nothing in it.
+    """
+    import traceback
+
+    def hook(exc_type, exc_value, exc_traceback):
+        if issubclass(exc_type, KeyboardInterrupt):
+            sys.__excepthook__(exc_type, exc_value, exc_traceback)
+            return
+        text = "".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+        path = None
+        try:
+            from core import paths
+
+            path = paths.user_data_dir() / "crash.log"
+            with path.open("a", encoding="utf-8") as handle:
+                handle.write(f"\n===== {datetime.now().isoformat()} =====\n{text}")
+        except Exception:  # noqa: BLE001 - the handler must never raise
+            pass
+        try:
+            print(text, file=sys.stderr, flush=True)
+        except Exception:
+            pass
+        try:
+            from PySide6.QtWidgets import QApplication, QMessageBox
+
+            if QApplication.instance() is not None:
+                QMessageBox.critical(
+                    None,
+                    "Something went wrong",
+                    "The suite hit an unexpected error.\n\n"
+                    f"{exc_type.__name__}: {exc_value}\n\n"
+                    + (f"A full report was written to:\n{path}" if path else "")
+                    + "\n\nYour ROM file on disk has not been touched.",
+                )
+        except Exception:  # noqa: BLE001
+            pass
+
+    sys.excepthook = hook
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv if argv is None else argv)
 
     if "--self-test" in argv:
         rest = [a for a in argv[1:] if a != "--self-test"]
         return self_test(rest[0] if rest else None)
+
+    install_crash_handler()
 
     app = QApplication(argv)
     app.setApplicationName("NFL Blitz Mod Suite")

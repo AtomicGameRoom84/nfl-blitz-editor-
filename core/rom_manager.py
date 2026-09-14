@@ -379,12 +379,24 @@ class ROMManager:
         ]
 
     def changed_byte_count(self) -> int:
-        """How many individual bytes differ from the loaded image."""
+        """How many individual bytes differ from the loaded image.
+
+        Vectorised deliberately: this runs on every edit to keep the status
+        bar current, and a Python loop over a 16 MiB ROM took seconds, which
+        made every keystroke feel like a freeze.
+        """
         self._require_loaded()
+        import numpy as np
+
         limit = min(len(self._original), len(self._data))
-        count = sum(
-            1 for i in range(limit) if self._original[i] != self._data[i]
-        )
+        if limit:
+            # memoryview slices, so neither buffer is copied: taking a bytes()
+            # copy of a 16 MiB working image on every edit was itself the cost.
+            original = np.frombuffer(memoryview(self._original)[:limit], dtype=np.uint8)
+            current = np.frombuffer(memoryview(self._data)[:limit], dtype=np.uint8)
+            count = int(np.count_nonzero(original != current))
+        else:
+            count = 0
         return count + abs(len(self._data) - len(self._original))
 
     # -- checksum ----------------------------------------------------------

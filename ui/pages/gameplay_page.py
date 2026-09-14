@@ -86,7 +86,9 @@ class GameplayPage(Page):
         self.state.definitionChanged.connect(self.rebuild)
         self.state.romLoaded.connect(self.rebuild)
         self.state.romClosed.connect(self.rebuild)
-        self.state.romChanged.connect(lambda _r: self.refresh_values())
+        self.state.romChanged.connect(
+            lambda _r: self.refresh_values() if self.isVisible() else None
+        )
         self.rebuild()
 
     # -- construction ------------------------------------------------------

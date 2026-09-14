@@ -32,7 +32,12 @@ DEFAULT_MERGE_GAP = 16
 
 
 def _as_array(buffer: bytes | bytearray | memoryview) -> np.ndarray:
-    return np.frombuffer(bytes(buffer), dtype=np.uint8)
+    """View a buffer as bytes without copying it.
+
+    diff_buffers runs on every edit to keep the status bar current, so a
+    defensive bytes() copy of a 16 MiB ROM here is not free.
+    """
+    return np.frombuffer(memoryview(buffer), dtype=np.uint8)
 
 
 def diff_buffers(
@@ -53,7 +58,10 @@ def diff_buffers(
     ranges: List[Tuple[int, int]] = []
 
     if common:
-        unequal = _as_array(left[:common]) != _as_array(right[:common])
+        unequal = (
+            _as_array(memoryview(left)[:common])
+            != _as_array(memoryview(right)[:common])
+        )
         indices = np.flatnonzero(unequal)
         if indices.size:
             # Split wherever more than merge_gap identical bytes separate

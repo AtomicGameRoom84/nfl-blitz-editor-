@@ -32,6 +32,7 @@ from tools.comparator import ComparisonResult, DiffRegion, ROMComparator
 from ui import theme
 from ui.dialogs.bookmark_dialog import BookmarkDialog
 from ui.pages.base_page import Page, card, hint
+from ui.widgets.table_utils import bulk_update, fit_columns
 
 ROM_FILTER = "N64 ROMs (*.z64 *.v64 *.n64 *.rom *.bin);;All files (*)"
 COLUMNS = ("Address", "Length", "Region", "Before", "After", "Reads as")
@@ -235,6 +236,15 @@ class ComparePage(Page):
     def _populate(self) -> None:
         regions = self._filtered()
         shown = regions[:5000]
+        with bulk_update(self._table):
+            self._populate_rows(shown)
+        fit_columns(self._table, stretch_column=len(COLUMNS) - 1)
+        if len(regions) > len(shown):
+            self._summary.setText(
+                self._summary.text() + f"\nShowing the first {len(shown):,} regions."
+            )
+
+    def _populate_rows(self, shown) -> None:
         self._table.setRowCount(len(shown))
         for row, region in enumerate(shown):
             readings = region.interpretations()
@@ -265,14 +275,6 @@ class ComparePage(Page):
                 if column == 0:
                     item.setData(Qt.UserRole, row)
                 self._table.setItem(row, column, item)
-        self._table.resizeColumnsToContents()
-        self._table.horizontalHeader().setSectionResizeMode(
-            len(COLUMNS) - 1, QHeaderView.Stretch
-        )
-        if len(regions) > len(shown):
-            self._summary.setText(
-                self._summary.text() + f"\nShowing the first {len(shown):,} regions."
-            )
 
     def _selected_regions(self) -> List[DiffRegion]:
         regions = self._filtered()
