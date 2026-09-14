@@ -2,7 +2,7 @@ name: Windows build
 
 # PyInstaller cannot cross-compile, so the Windows executable is built here on
 # a hosted Windows runner. Download it from the run's Artifacts section, or
-# from the Release when a tag is pushed.
+# from the Release when a v* tag is pushed.
 
 on:
   push:
@@ -40,26 +40,48 @@ jobs:
       - name: Build executable
         run: python -m PyInstaller packaging/nfl_blitz_suite.spec --noconfirm
 
+      - name: Generate a demo cartridge to test against
+        run: python tools/make_demo_rom.py demo.z64
+
       - name: Smoke-test the executable
         shell: pwsh
         run: |
-          # Generate the synthetic demo cartridge, then confirm the frozen build
-          # starts and can load it. A build that cannot find its bundled game
-          # definitions fails here rather than in a user's hands.
-          python tools/make_demo_rom.py demo.z64
-          $env:NFL_BLITZ_SUITE_SMOKE_ROM = "demo.z64"
+          # The exe is a windowed build with no console, so it writes its
+          # findings to self-test-report.txt. Check the exit code AND the
+          # report: a build that cannot find its bundled game definitions
+          # must fail here rather than in a user's hands.
+          Remove-Item self-test-report.txt -ErrorAction SilentlyContinue
           $proc = Start-Process -FilePath "dist\NFLBlitzModSuite.exe" `
-            -ArgumentList "--self-test","demo.z64" -PassThru -Wait -NoNewWindow
+            -ArgumentList "--self-test","demo.z64" -PassThru -Wait
+          if (Test-Path self-test-report.txt) {
+            Write-Host "--- self-test report ---"
+            Get-Content self-test-report.txt
+          } else {
+            Write-Error "the executable produced no self-test report"
+            exit 1
+          }
           if ($proc.ExitCode -ne 0) {
             Write-Error "self-test exited with $($proc.ExitCode)"
             exit 1
           }
+          if (-not (Select-String -Path self-test-report.txt -Pattern "self-test OK" -Quiet)) {
+            Write-Error "self-test did not report success"
+            exit 1
+          }
+
+      - name: Report executable size
+        shell: pwsh
+        run: |
+          $exe = Get-Item dist\NFLBlitzModSuite.exe
+          "{0:N1} MiB  {1}" -f ($exe.Length / 1MB), $exe.FullName
 
       - name: Upload executable
         uses: actions/upload-artifact@v4
         with:
           name: NFLBlitzModSuite-windows
-          path: dist/NFLBlitzModSuite.exe
+          path: |
+            dist/NFLBlitzModSuite.exe
+            self-test-report.txt
           if-no-files-found: error
 
       - name: Attach to release
@@ -67,3 +89,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist/NFLBlitzModSuite.exe
+          body_path: docs/RELEASE_NOTES_0.1.md
+          name: NFL Blitz Mod Suite ${{ github.ref_name }}
+          draft: false
+          prerelease: true

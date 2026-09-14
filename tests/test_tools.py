@@ -139,3 +139,33 @@ def test_pointer_finder_respects_alignment():
     data[0x11:0x15] = (0x800).to_bytes(4, "big")  # deliberately unaligned
     assert not PointerFinder(bytes(data)).candidates_for(0x800, alignment=4)
     assert PointerFinder(bytes(data)).candidates_for(0x800, alignment=1)
+
+
+# -- versioning -----------------------------------------------------------
+
+
+def test_version_matches_pyproject():
+    """A release tag, pyproject and the About box must not drift apart."""
+    import tomllib
+    from pathlib import Path
+
+    from core.version import __version__
+
+    root = Path(__file__).resolve().parent.parent
+    pyproject = tomllib.loads((root / "pyproject.toml").read_text())
+    assert pyproject["project"]["version"] == __version__
+
+
+def test_release_notes_exist_for_the_current_version():
+    from pathlib import Path
+
+    from core.version import __version__
+
+    root = Path(__file__).resolve().parent.parent
+    major_minor = ".".join(__version__.split(".")[:2])
+    notes = root / "docs" / f"RELEASE_NOTES_{major_minor}.md"
+    assert notes.is_file(), f"{notes.name} is missing"
+    text = notes.read_text()
+    # The notes must keep stating what is not finished.
+    assert "What does not work yet" in text
+    assert "No gameplay sliders" in text

@@ -46,9 +46,9 @@ def user_data_dir() -> Path:
     override = os.environ.get(ENV_OVERRIDE)
     if override:
         base = Path(override).expanduser()
-    elif os.name == "nt":
+    elif sys.platform == "win32":
         base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming")) / APP_NAME
-    elif os.uname().sysname == "Darwin":  # pragma: no cover - platform specific
+    elif sys.platform == "darwin":  # pragma: no cover - platform specific
         base = Path.home() / "Library" / "Application Support" / APP_NAME
     else:
         base = Path(

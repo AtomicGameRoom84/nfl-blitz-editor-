@@ -21,50 +21,79 @@ from ui.app_state import AppState  # noqa: E402
 from ui.main_window import MainWindow  # noqa: E402
 
 
+#: The self-test writes here as well as to stdout. A windowed Windows build
+#: has no console, so a report file is the only reliable way for CI -- or a
+#: user chasing a startup problem -- to see what happened.
+SELF_TEST_REPORT = "self-test-report.txt"
+
+
 def self_test(rom_path: str | None = None) -> int:
-    """Start up headlessly, then exit. Used by the packaging smoke test.
+    """Start up headlessly, exercise every page, then exit.
 
     A frozen build that cannot find its bundled game definitions, or that
     crashes while constructing a page, fails here rather than in a user's
     hands.
     """
     import os
+    import traceback
 
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    from core import paths
 
-    app = QApplication([])
-    theme.apply_theme(app)
-    state = AppState()
-    state.settings.set("auto_backup_on_load", False)
-    window = MainWindow(state)
+    lines: list[str] = []
 
-    definitions = len(state.address_db.definitions)
-    print(f"project root      : {paths.PROJECT_ROOT}")
-    print(f"game definitions  : {definitions}")
-    print(f"pages             : {len(window._pages)}")
-    if definitions == 0:
-        print("FAIL: no game definitions were bundled with this build")
-        return 1
-    if state.address_db.load_errors:
-        print("FAIL: definition load errors:", state.address_db.load_errors)
-        return 1
-
-    if rom_path and Path(rom_path).is_file():
+    def record(text: str) -> None:
+        lines.append(text)
         try:
-            state.load_rom(rom_path)
-        except Exception as exc:  # noqa: BLE001 - report, do not mask
-            print(f"FAIL: could not load {rom_path}: {exc}")
-            return 1
-        print(f"loaded ROM        : {Path(rom_path).name} ({state.rom.size} bytes)")
-        for key in list(window._pages):
-            window.navigate(key)
-            app.processEvents()
-        print(f"visited all {len(window._pages)} pages")
-        state.rom.close()
+            print(text, flush=True)
+        except Exception:      # no console on a windowed build
+            pass
 
-    print("self-test OK")
-    return 0
+    status = 1
+    try:
+        from core import paths
+        from core.version import full_title
+
+        record(f"build             : {full_title()}")
+        record(f"frozen            : {bool(getattr(sys, 'frozen', False))}")
+        record(f"project root      : {paths.PROJECT_ROOT}")
+
+        app = QApplication([])
+        theme.apply_theme(app)
+        state = AppState()
+        state.settings.set("auto_backup_on_load", False)
+        window = MainWindow(state)
+
+        definitions = len(state.address_db.definitions)
+        record(f"game definitions  : {definitions}")
+        record(f"pages             : {len(window._pages)}")
+
+        if definitions == 0:
+            record("FAIL: no game definitions were bundled with this build")
+        elif state.address_db.load_errors:
+            record(f"FAIL: definition load errors: {state.address_db.load_errors}")
+        else:
+            if rom_path and Path(rom_path).is_file():
+                state.load_rom(rom_path)
+                record(
+                    f"loaded ROM        : {Path(rom_path).name} "
+                    f"({state.rom.size} bytes)"
+                )
+                for key in list(window._pages):
+                    window.navigate(key)
+                    app.processEvents()
+                record(f"visited all {len(window._pages)} pages")
+                state.rom.close()
+            record("self-test OK")
+            status = 0
+    except Exception:          # noqa: BLE001 - report, never mask
+        record("FAIL: unhandled exception")
+        lines.append(traceback.format_exc())
+
+    try:
+        Path(SELF_TEST_REPORT).write_text("\n".join(lines) + "\n", encoding="utf-8")
+    except OSError:
+        pass
+    return status
 
 
 def main(argv: list[str] | None = None) -> int:

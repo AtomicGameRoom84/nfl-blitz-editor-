@@ -209,7 +209,10 @@ def test_pages_survive_closing_the_rom(window, qt_app):
         window.navigate(key)
         qt_app.processEvents()
     assert not window.state.rom.is_loaded
-    assert window.windowTitle() == "NFL Blitz Mod Suite"
+    # With no ROM open the title falls back to the versioned application name.
+    from core.version import full_title
+
+    assert window.windowTitle() == full_title()
 
 
 # -- wide integer fields --------------------------------------------------
@@ -266,3 +269,17 @@ def test_team_page_uses_a_number_edit_for_a_pointer_field(window, qt_app, builti
     assert page.editor.availability()
     assert isinstance(page._controls["roster_pointer"], NumberEdit)
     assert isinstance(page._controls["rating_passing"], QSpinBox)
+
+
+def test_about_box_reports_the_version_and_the_caveats(qt_app):
+    """The About box must state the version and what is not finished."""
+    from PySide6.QtWidgets import QLabel
+
+    from core.version import version_string
+    from ui.dialogs.common import AboutDialog
+
+    dialog = AboutDialog()
+    text = " ".join(label.text() for label in dialog.findChildren(QLabel))
+    assert version_string() in text
+    assert "not yet located" in text
+    assert "not implemented" in text

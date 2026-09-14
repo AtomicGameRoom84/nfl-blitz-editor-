@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 
 from core.byte_order import ByteOrder
 from core.datatypes import parse_number
+from core.version import full_title, version_string
 from tools.pointer_finder import PointerFinder
 from tools.scanner import ROMScanner
 from ui import theme
@@ -180,6 +181,9 @@ class AboutDialog(QDialog):
 
     TEXT = (
         "<h2>NFL Blitz Mod Suite</h2>"
+        "<p><b>Version {version}</b> \u2014 an early preview. Teams and rosters "
+        "for the USA cartridge are mapped and editable; gameplay constants are "
+        "not yet located, and the graphics editor is not implemented.</p>"
         "<p>A ROM hacking workbench for the Nintendo 64 version of NFL Blitz.</p>"
         "<p><b>This application ships no game data and no ROM addresses that "
         "have not been verified.</b> The team, roster and graphics editors "
@@ -193,10 +197,10 @@ class AboutDialog(QDialog):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("About NFL Blitz Mod Suite")
+        self.setWindowTitle(f"About {full_title()}")
         self.setMinimumWidth(520)
         layout = QVBoxLayout(self)
-        label = QLabel(self.TEXT)
+        label = QLabel(self.TEXT.format(version=version_string()))
         label.setWordWrap(True)
         label.setTextFormat(Qt.RichText)
         layout.addWidget(label)

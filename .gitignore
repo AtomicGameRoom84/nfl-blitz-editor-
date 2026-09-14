@@ -22,3 +22,6 @@ demo.z64
 build/
 dist/
 *.spec.bak
+
+# Self-test output
+self-test-report.txt

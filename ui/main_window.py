@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.byte_order import ByteOrder
+from core.version import APP_NAME, full_title
 from ui import theme
 from ui.app_state import AppState
 from ui.dialogs.common import (
@@ -63,7 +64,7 @@ class MainWindow(QMainWindow):
     def __init__(self, state: AppState) -> None:
         super().__init__()
         self.state = state
-        self.setWindowTitle("NFL Blitz Mod Suite")
+        self.setWindowTitle(full_title())
         self.resize(1380, 880)
 
         self._pages: Dict[str, QWidget] = {}
@@ -429,7 +430,7 @@ class MainWindow(QMainWindow):
             self._rom_label.setText("No ROM loaded")
             self._modified_label.setText("")
             self._definition_label.setText("")
-            self.setWindowTitle("NFL Blitz Mod Suite")
+            self.setWindowTitle(full_title())
             return
 
         name = rom.path.name if rom.path else "(in memory)"
@@ -449,7 +450,7 @@ class MainWindow(QMainWindow):
             definition.display_name if definition else "no definition — hex tools only"
         )
         self.setWindowTitle(
-            f"NFL Blitz Mod Suite — {name}" + ("*" if rom.is_dirty else "")
+            f"{APP_NAME} — {name}" + ("*" if rom.is_dirty else "")
         )
 
     # -- shutdown ----------------------------------------------------------
