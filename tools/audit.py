@@ -209,6 +209,29 @@ def t_refine():
     assert len(kept)==len(first)
     return f"{len(first)} -> {len(kept)} unchanged"
 check("narrowing", t_refine)
+def t_narrow_workflow():
+    # The whole point of the suite: find the handful of addresses that moved
+    # between two ROMs.  Search, change three of the hits, keep only what
+    # changed, and the answer should be exactly those three.
+    sp = page("search")
+    sp._mode.setCurrentIndex(sp._mode.findData("value"))
+    sp._type.setCurrentIndex(sp._type.findData(DataType.U16))
+    sp._value_edit.setText("100")
+    sp._alignment.setCurrentIndex(sp._alignment.findData(2))
+    sp.run_search(); app.processEvents()
+    before = len(sp._result.hits)
+    assert before > 3, before
+    moved = sorted(h.address for h in sp._result.hits)[:3]
+    for addr in moved:
+        state.rom.write_value(addr, 4321, DataType.U16)
+    sp._refinement.setCurrentIndex(sp._refinement.findData("changed"))
+    sp.refine_results(); app.processEvents()
+    kept = sorted(h.address for h in sp._result.hits)
+    assert kept == moved, f"{kept} != {moved}"
+    assert sp._table.rowCount() == 3, sp._table.rowCount()
+    for _ in moved: state.rom.undo_last()
+    return f"{before} hits -> the 3 that changed, exactly"
+check("narrow two ROMs down to what moved", t_narrow_workflow)
 
 print("\n== 7. BOOKMARKS -> DEFINITION ==", flush=True)
 from core.bookmarks import Bookmark

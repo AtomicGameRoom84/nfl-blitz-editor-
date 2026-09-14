@@ -13,7 +13,7 @@ exercising.
 - **The ROM Scanner looked hung.** Surveying a 16 MiB cartridge takes about
   four seconds with the window frozen. It now shows a wait cursor.
 
-Audit: 51 checks, all passing. Unit tests: 284 passing.
+Audit: 52 checks, all passing. Unit tests: 284 passing.
 
 ---
 
