@@ -35,6 +35,7 @@ from core.datatypes import DataType
 from ui import theme
 from ui.dialogs.bookmark_dialog import BookmarkDialog
 from ui.pages.base_page import Page, hint
+from ui.widgets.table_utils import fit_columns
 
 COLUMNS = ("Name", "Address", "Type", "Category", "Current", "Default", "Confidence", "Notes")
 
@@ -117,7 +118,9 @@ class BookmarksPage(Page):
 
         self.state.bookmarksChanged.connect(self.refresh)
         self.state.romLoaded.connect(self.refresh)
-        self.state.romChanged.connect(lambda _r: self.refresh())
+        self.state.romChanged.connect(
+            lambda _r: self.refresh() if self.isVisible() else None
+        )
         self.refresh()
 
     # -- data --------------------------------------------------------------
@@ -170,10 +173,7 @@ class BookmarksPage(Page):
                     if str(bookmark.default_value) != current_value:
                         item.setForeground(theme.color("modified"))
                 self._table.setItem(row, column, item)
-        self._table.resizeColumnsToContents()
-        self._table.horizontalHeader().setSectionResizeMode(
-            len(COLUMNS) - 1, QHeaderView.Stretch
-        )
+        fit_columns(self._table, stretch_column=len(COLUMNS) - 1)
         self._count_label.setText(
             f"{len(bookmarks)} shown of {len(self.state.bookmarks)} total"
         )

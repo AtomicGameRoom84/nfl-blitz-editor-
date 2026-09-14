@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import List
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
 from editors.roster_editor import RosterEditor
 from editors.team_editor import TeamEditor
 from ui.pages.base_page import Page, UnavailableBanner, card, hint
+from ui.widgets.table_utils import bulk_update, fit_columns
 
 
 class RosterEditorPage(Page):
@@ -150,7 +151,10 @@ class RosterEditorPage(Page):
         self._table.setHorizontalHeaderLabels(
             ["#"] + [field.name for field in self.editor.fields()]
         )
-        self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        # Deliberately NOT ResizeToContents: that re-measures every cell in a
+        # column on each insert, which on a 480-row roster takes minutes.
+        # Columns are sized once, after the rows are in, by fit_columns().
+        self._table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
 
         self._bulk_field.clear()
         for field_id in self.editor.attribute_fields():
@@ -188,33 +192,44 @@ class RosterEditorPage(Page):
                 r for r in records if needle in str(r.get("name", "")).lower()
             ]
 
+        table = self.editor.table
+        fields = [table.field(field_id) for field_id in self._field_ids]
+
         self._loading = True
         try:
-            self._row_indices = [record.index for record in records]
-            self._table.setRowCount(len(records))
-            for row, record in enumerate(records):
-                index_item = QTableWidgetItem(str(record.index))
-                index_item.setFlags(index_item.flags() & ~Qt.ItemIsEditable)
-                index_item.setData(Qt.UserRole, record.index)
-                self._table.setItem(row, 0, index_item)
-                for column, field_id in enumerate(self._field_ids, start=1):
-                    value = record.values.get(field_id)
-                    field = self.editor.table.field(field_id)
-                    if field is not None and field.kind == "enum":
-                        # Show the definition's label ("QB"), not the raw byte.
-                        text = self.editor.position_label(value) if field_id == "position" \
-                            else str(field.options.get("values", {}).get(str(value), value))
-                    elif isinstance(value, float):
-                        # A float read back from 4 bytes prints 17 digits of
-                        # binary noise otherwise.
-                        text = f"{value:g}"
-                    else:
-                        text = str(value)
-                    item = QTableWidgetItem(text)
-                    item.setData(Qt.UserRole, record.index)
-                    self._table.setItem(row, column, item)
+            with bulk_update(self._table):
+                self._row_indices = [record.index for record in records]
+                self._table.setRowCount(len(records))
+                for row, record in enumerate(records):
+                    index_item = QTableWidgetItem(str(record.index))
+                    index_item.setFlags(index_item.flags() & ~Qt.ItemIsEditable)
+                    index_item.setData(Qt.UserRole, record.index)
+                    self._table.setItem(row, 0, index_item)
+                    for column, (field_id, field) in enumerate(
+                        zip(self._field_ids, fields), start=1
+                    ):
+                        value = record.values.get(field_id)
+                        if field is not None and field.kind == "enum":
+                            # Show the definition's label ("QB"), not the raw byte.
+                            text = (
+                                self.editor.position_label(value)
+                                if field_id == "position"
+                                else str(
+                                    field.options.get("values", {}).get(str(value), value)
+                                )
+                            )
+                        elif isinstance(value, float):
+                            # A float read back from 4 bytes prints 17 digits of
+                            # binary noise otherwise.
+                            text = f"{value:g}"
+                        else:
+                            text = str(value)
+                        item = QTableWidgetItem(text)
+                        item.setData(Qt.UserRole, record.index)
+                        self._table.setItem(row, column, item)
         finally:
             self._loading = False
+        fit_columns(self._table)
         self._count_label.setText(f"{len(records)} player(s)")
 
     # -- editing -----------------------------------------------------------
@@ -222,9 +237,12 @@ class RosterEditorPage(Page):
     def _item_changed(self, item: QTableWidgetItem) -> None:
         if self._loading or item.column() == 0:
             return
+        table = self.editor.table
+        if table is None:
+            return
         record_index = item.data(Qt.UserRole)
         field_id = self._field_ids[item.column() - 1]
-        field = self.editor.table.field(field_id)
+        field = table.field(field_id)
         text = item.text()
         try:
             if field is not None and field.kind == "text":
@@ -236,13 +254,20 @@ class RosterEditorPage(Page):
             else:
                 value = int(text, 0)
             self.editor.write_field(record_index, field_id, value)
-        except (ValueError, KeyError, RuntimeError, IndexError) as exc:
-            QMessageBox.warning(self, "Could not write value", str(exc))
-            self.refresh_table()
+        except Exception as exc:      # noqa: BLE001 - a slot must not propagate
+            # Rebuilding the table here would delete the very item Qt is
+            # mid-signal on, and would re-enter this slot. Defer it.
+            message = str(exc)
+            QTimer.singleShot(0, lambda: self._reject_edit(message))
             return
         self.state.status(
             f"Player #{record_index}: {field.name if field else field_id} = {value}", 3000
         )
+
+    def _reject_edit(self, message: str) -> None:
+        """Report a rejected cell edit and restore the displayed value."""
+        QMessageBox.warning(self, "Could not write value", message)
+        self.refresh_table()
 
     @staticmethod
     def _enum_value(field, text: str) -> int:

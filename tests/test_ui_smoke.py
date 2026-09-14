@@ -283,3 +283,186 @@ def test_about_box_reports_the_version_and_the_caveats(qt_app):
     assert version_string() in text
     assert "not yet located" in text
     assert "not implemented" in text
+
+
+# -- big-table performance and edit safety --------------------------------
+#
+# The demo ROM has 64 players, so none of the tests above exercised the size
+# that actually mattered: the real NFL Blitz roster is 480 records, and
+# filling it through a ResizeToContents header took over two and a half
+# minutes, which reads as a frozen application. These tests pin the shape of
+# the problem rather than the exact timing.
+
+
+def _big_roster_definition(builtin_games_dir):
+    """A 480-record roster laid over the demo ROM, matching the real size."""
+    from core.address_db import GameDefinition
+
+    definition = GameDefinition.load(builtin_games_dir / "demo_rom.json")
+    players = definition.table("players")
+    players.record_count = 480
+    players.base_address = 0x1000
+    players.group_size = 16
+    return definition
+
+
+def test_roster_never_fills_a_table_in_resize_to_contents_mode(
+    window, qt_app, builtin_games_dir, monkeypatch
+):
+    """The precise mechanism behind the 167-second roster freeze.
+
+    QHeaderView.ResizeToContents re-measures every cell in a column on each
+    insert. Filling the real 480-row roster made 5,760 setItem calls at 29 ms
+    each. A wall-clock assertion does not reproduce this reliably on a
+    smaller table, so this pins the cause directly: no insert may happen
+    while the header is in that mode.
+    """
+    from PySide6.QtWidgets import QHeaderView, QTableWidget
+
+    observed = []
+    original_set_item = QTableWidget.setItem
+
+    def spy(self, row, column, item):
+        header = self.horizontalHeader()
+        if header.count():
+            observed.append(header.sectionResizeMode(column))
+        return original_set_item(self, row, column, item)
+
+    monkeypatch.setattr(QTableWidget, "setItem", spy)
+
+    window.state.set_definition(_big_roster_definition(builtin_games_dir))
+    window.navigate("roster")
+    qt_app.processEvents()
+    page = window.page("roster")
+    page.rebuild()
+    qt_app.processEvents()
+
+    assert page._table.rowCount() == 480
+    assert observed, "no cells were inserted, so nothing was actually tested"
+    assert QHeaderView.ResizeToContents not in observed, (
+        "cells were inserted while the header was in ResizeToContents mode, "
+        "which is what made the roster take minutes to open"
+    )
+
+
+def test_large_roster_opens_promptly(window, qt_app, builtin_games_dir):
+    """Loose upper bound, as a backstop to the mechanism test above."""
+    import time
+
+    window.state.set_definition(_big_roster_definition(builtin_games_dir))
+    window.navigate("roster")
+    qt_app.processEvents()
+
+    page = window.page("roster")
+    started = time.monotonic()
+    page.rebuild()
+    qt_app.processEvents()
+    elapsed = time.monotonic() - started
+
+    assert page._table.rowCount() == 480
+    assert elapsed < 10.0, f"filling 480 rows took {elapsed:.1f}s"
+
+
+def test_editing_a_large_roster_cell_is_prompt(window, qt_app, builtin_games_dir):
+    import time
+
+    window.state.set_definition(_big_roster_definition(builtin_games_dir))
+    window.navigate("roster")
+    qt_app.processEvents()
+    page = window.page("roster")
+
+    name_column = page._field_ids.index("name") + 1
+    started = time.monotonic()
+    page._table.item(0, name_column).setText("SMITH")
+    qt_app.processEvents()
+    elapsed = time.monotonic() - started
+
+    assert page.editor.read_record(0).values["name"] == "SMITH"
+    assert elapsed < 5.0, f"one cell edit took {elapsed:.1f}s"
+
+
+def test_rejected_cell_edit_does_not_reenter_the_table(window, qt_app, builtin_games_dir, monkeypatch):
+    """A refused edit must warn and revert, not rebuild from inside the signal.
+
+    Rebuilding the table inside ``itemChanged`` deletes the item Qt is
+    mid-signal on, which previously hung the application.
+    """
+    from PySide6.QtWidgets import QMessageBox
+
+    warnings = []
+    monkeypatch.setattr(
+        QMessageBox, "warning", staticmethod(lambda *a, **k: warnings.append(a))
+    )
+
+    window.state.set_definition(_big_roster_definition(builtin_games_dir))
+    window.navigate("roster")
+    qt_app.processEvents()
+    page = window.page("roster")
+
+    name_column = page._field_ids.index("name") + 1
+    before = page.editor.read_record(0).values["name"]
+
+    # 40 characters cannot fit the 16-byte field.
+    page._table.item(0, name_column).setText("A" * 40)
+    qt_app.processEvents()
+    qt_app.processEvents()      # let the deferred handler run
+
+    assert warnings, "the user was never told the edit was refused"
+    assert page.editor.read_record(0).values["name"] == before
+    assert page._table.item(0, name_column).text() == before
+
+
+def test_bad_number_in_a_cell_is_refused_cleanly(window, qt_app, builtin_games_dir, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    warnings = []
+    monkeypatch.setattr(
+        QMessageBox, "warning", staticmethod(lambda *a, **k: warnings.append(a))
+    )
+    window.state.set_definition(_big_roster_definition(builtin_games_dir))
+    window.navigate("roster")
+    qt_app.processEvents()
+    page = window.page("roster")
+
+    number_column = page._field_ids.index("number") + 1
+    before = page.editor.read_record(1).values["number"]
+    page._table.item(1, number_column).setText("banana")
+    qt_app.processEvents()
+    qt_app.processEvents()
+
+    assert warnings
+    assert page.editor.read_record(1).values["number"] == before
+
+
+def test_bulk_update_suspends_resize_to_contents(qt_app):
+    """The helper must neutralise the mode even if the caller set it."""
+    from PySide6.QtWidgets import QHeaderView, QTableWidget
+
+    from ui.widgets.table_utils import bulk_update
+
+    table = QTableWidget(3, 2)
+    table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+    with bulk_update(table):
+        assert table.horizontalHeader().sectionResizeMode(0) != (
+            QHeaderView.ResizeToContents
+        )
+
+
+def test_table_helpers_restore_state(qt_app):
+    from PySide6.QtWidgets import QTableWidget
+
+    from ui.widgets.table_utils import bulk_update, fit_columns
+
+    table = QTableWidget(3, 2)
+    assert not table.signalsBlocked()
+    with bulk_update(table):
+        assert table.signalsBlocked()
+    assert not table.signalsBlocked()
+
+    # Even when the body raises, the table must not be left mute.
+    with pytest.raises(RuntimeError):
+        with bulk_update(table):
+            raise RuntimeError("boom")
+    assert not table.signalsBlocked()
+
+    fit_columns(table, stretch_column=1)

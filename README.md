@@ -25,21 +25,15 @@ hex by hand, and share your work as an IPS or BPS patch.
 
 ## Windows executable
 
-**Download it:** open the repository's [**Actions**](../../actions) tab, pick
-the most recent green *Windows build* run, and download the
-`NFLBlitzModSuite-windows` artifact from the bottom of the page. Unzip it and
-double-click `NFLBlitzModSuite.exe` — no installer, no Python required.
+**[⬇ Download the latest release](../../releases/latest)** — grab
+`NFLBlitzModSuite.exe`, double-click it. No installer, no Python required.
 
-Every push is built, tested and smoke-tested on a Windows runner, so any run
-showing a green tick has a working executable attached.
+Every push is built, tested and smoke-tested on a Windows runner; a successful
+build publishes the release automatically, tagged from the version in
+`core/version.py`. Individual builds are also kept as Actions artifacts if you
+want a specific commit.
 
-**To publish it as a proper Release:** create a `v*` tag. From the web UI,
-*Releases → Draft a new release → Choose a tag → type `v0.1.0` → Create new
-tag → Publish release*. The workflow then builds and attaches
-`NFLBlitzModSuite.exe` to that release automatically, using
-[docs/RELEASE_NOTES_0.1.md](docs/RELEASE_NOTES_0.1.md) as the body. (Tags have
-to be pushed by a human here; the automation in this repository can push
-branches but not tags.)
+New to it? Start with [docs/QUICKSTART.md](docs/QUICKSTART.md).
 
 To build it yourself on a Windows machine:
 
@@ -177,6 +171,7 @@ Override it with the `NFL_BLITZ_SUITE_HOME` environment variable.
 
 | Document | What it covers |
 | --- | --- |
+| [docs/QUICKSTART.md](docs/QUICKSTART.md) | Five minutes from download to a modified ROM |
 | [docs/NFL_BLITZ_USA_MAP.md](docs/NFL_BLITZ_USA_MAP.md) | The reverse-engineered ROM map: tables, offsets, field layouts |
 | [docs/FEATURES.md](docs/FEATURES.md) | What works today versus what is planned |
 | [docs/DISCOVERING_ADDRESSES.md](docs/DISCOVERING_ADDRESSES.md) | How to find the addresses this suite does not yet know |

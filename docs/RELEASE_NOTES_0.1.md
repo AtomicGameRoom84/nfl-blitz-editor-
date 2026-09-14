@@ -1,4 +1,37 @@
-# NFL Blitz Mod Suite 0.1.0 — preview
+# NFL Blitz Mod Suite 0.1.1 — preview
+
+## Fixed in 0.1.1
+
+**The Roster Editor froze the application.** Opening it against a real NFL
+Blitz ROM took **167 seconds** — Windows showed *Not Responding* and there was
+nothing to do but kill it.
+
+Cause: the table header was set to `ResizeToContents`, which re-measures every
+cell in a column on each insert. Filling the 480-row roster made 5,760 cell
+inserts at 29 ms each. Columns are now sized once, after the rows are in.
+
+**Opening the Roster Editor: 167s → 0.16s.**
+
+Three more things came out of the same investigation:
+
+- **A refused cell edit hung the app permanently.** Typing a name too long for
+  the field, or a jersey number out of range, rebuilt the table from inside
+  the cell-changed signal — which deletes the item Qt is still signalling on
+  and re-enters the handler. Rejections are now deferred: you get a warning
+  and the cell reverts. The GameShark page had the same flaw.
+- **Every single edit cost ~3 seconds.** The status bar counted changed bytes
+  with a Python loop over all 16.7 million of them, and the Patch Builder
+  re-diffed the whole ROM even while hidden. **One edit: 3.14s → 0.30s.**
+- **Crashes now leave evidence.** An unhandled error writes
+  `%APPDATA%\NFLBlitzModSuite\crash.log` and shows a dialog saying where it
+  went, instead of the window vanishing.
+
+Regression tests pin the actual mechanism, not a timing threshold — verified
+to fail on the old code and pass on the new.
+
+---
+
+## 0.1.0
 
 First build you can actually run. Download `NFLBlitzModSuite.exe` below, put it
 anywhere, and double-click it. No installer, no Python needed.

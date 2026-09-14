@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Dict, List
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -49,6 +49,7 @@ from tools.gameshark import (
 )
 from ui import theme
 from ui.pages.base_page import Page, card, hint
+from ui.widgets.table_utils import bulk_update, fit_columns
 
 CATALOGUE_COLUMNS = ("Name", "Category", "RAM address", "Value", "GameShark code", "Notes")
 IMPORT_COLUMNS = ("Code", "What it does", "Maps to ROM", "Before", "After")
@@ -233,8 +234,7 @@ class GameSharkPage(Page):
 
     def _refresh_catalogue(self) -> None:
         codes = self._visible()
-        self._table.blockSignals(True)
-        try:
+        with bulk_update(self._table):
             self._table.setRowCount(len(codes))
             for row, entry in enumerate(codes):
                 value = self._values.get(entry.id, 1)
@@ -257,12 +257,7 @@ class GameSharkPage(Page):
                         item.setFont(theme.monospace_font(11))
                         item.setForeground(theme.color("accent"))
                     self._table.setItem(row, column, item)
-        finally:
-            self._table.blockSignals(False)
-        self._table.resizeColumnsToContents()
-        self._table.horizontalHeader().setSectionResizeMode(
-            len(CATALOGUE_COLUMNS) - 1, QHeaderView.Stretch
-        )
+        fit_columns(self._table, stretch_column=len(CATALOGUE_COLUMNS) - 1)
 
     def _catalogue_value_changed(self, item: QTableWidgetItem) -> None:
         if item.column() != 3:
@@ -278,8 +273,10 @@ class GameSharkPage(Page):
         try:
             value = parse_number(item.text().split("(")[0])
         except ValueError:
+            # Never rebuild the table from inside itemChanged: it deletes the
+            # item Qt is mid-signal on and re-enters this slot.
             self.state.status(f"{item.text()!r} is not a number.", 4000)
-            self._refresh_catalogue()
+            QTimer.singleShot(0, self._refresh_catalogue)
             return
         low = entry.minimum if entry.minimum is not None else 0
         high = entry.maximum if entry.maximum is not None else 0xFFFF
@@ -287,10 +284,10 @@ class GameSharkPage(Page):
             self.state.status(
                 f"{entry.name}: {value} is outside {low:g}..{high:g}.", 5000
             )
-            self._refresh_catalogue()
+            QTimer.singleShot(0, self._refresh_catalogue)
             return
         self._values[entry.id] = int(value)
-        self._refresh_catalogue()
+        QTimer.singleShot(0, self._refresh_catalogue)
 
     def _selected_entries(self) -> List[RamCode]:
         codes = self._visible()
@@ -430,8 +427,7 @@ class GameSharkPage(Page):
                         theme.color("success") if result.convertible else theme.color("text_dim")
                     )
                 self._import_table.setItem(row, column, item)
-        self._import_table.resizeColumnsToContents()
-        self._import_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        fit_columns(self._import_table, stretch_column=1)
 
         convertible = [r for r in self._results if r.changes_anything]
         summary = (

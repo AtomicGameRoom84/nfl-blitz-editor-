@@ -155,3 +155,20 @@ def test_close_resets_everything(rom):
     assert not rom.is_loaded
     assert rom.size == 0
     assert not rom.undo.can_undo
+
+
+def test_changed_byte_count_is_fast_on_a_large_rom(rom):
+    """This runs on every edit to keep the status bar current.
+
+    A Python loop over the bytes took seconds on a 16 MiB ROM, which made
+    every keystroke in the roster editor feel like a freeze.
+    """
+    import time
+
+    rom.write_bytes(0x2000, b"\xff" * 8)
+    started = time.monotonic()
+    for _ in range(20):
+        rom.changed_byte_count()
+    elapsed = time.monotonic() - started
+    assert rom.changed_byte_count() == 8
+    assert elapsed < 2.0, f"20 counts over {rom.size} bytes took {elapsed:.2f}s"
