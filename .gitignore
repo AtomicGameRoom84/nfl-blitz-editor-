@@ -1,0 +1,27 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+
+# Never commit ROMs, dumps or generated cartridges.
+*.z64
+*.v64
+*.n64
+*.rom
+demo.z64
+
+# Generated patches and exports
+*.ips
+*.bps
+
+# Build output
+build/
+dist/
+*.spec.bak
+
+# Self-test output
+self-test-report.txt
