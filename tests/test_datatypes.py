@@ -67,3 +67,38 @@ def test_parse_hex_bytes():
 def test_endian_short_labels():
     assert Endian.BIG.short == "BE"
     assert Endian.LITTLE.short == "LE"
+
+
+# -- binary-coded decimal -------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [(0x00, 0), (0x08, 8), (0x21, 21), (0x22, 22), (0x36, 36), (0x80, 80), (0x99, 99)],
+)
+def test_bcd_decode(raw, expected):
+    from core.datatypes import bcd_decode
+
+    assert bcd_decode(raw) == expected
+
+
+@pytest.mark.parametrize("value", [0, 1, 8, 22, 36, 80, 99])
+def test_bcd_round_trip(value):
+    from core.datatypes import bcd_decode, bcd_encode
+
+    assert bcd_decode(bcd_encode(value)) == value
+
+
+def test_bcd_rejects_invalid_nibbles():
+    from core.datatypes import bcd_decode
+
+    with pytest.raises(ValueError, match="not valid BCD"):
+        bcd_decode(0xAB)
+
+
+def test_bcd_encode_is_bounded_by_size():
+    from core.datatypes import bcd_encode
+
+    with pytest.raises(ValueError, match="does not fit"):
+        bcd_encode(100, size=1)
+    assert bcd_encode(1234, size=2) == 0x1234

@@ -87,6 +87,19 @@ says so in the application — no placeholder that looks functional.
 - [x] Patch inspection, change estimation, and in-place application to the
       working copy as a single undoable step
 
+### NFL Blitz (N64, USA) data
+- [x] ROM identified by exact fingerprint (SHA-1 and boot CRC pair)
+- [x] Team table mapped: 30 teams — city, nickname, two abbreviations, five
+      rating bars, overall value, roster pointer
+- [x] Player table mapped: 480 players — names, jersey numbers, positions,
+      portrait IDs, skill slots
+- [x] Jersey numbers decoded as binary-coded decimal, so the editor shows 22
+      rather than 34
+- [x] Upper-case city table mapped
+- [x] RAM ↔ ROM address mapping recorded for further research
+- [x] Positional team membership (16 players per block, no team field)
+- [x] Full details in [NFL_BLITZ_USA_MAP.md](NFL_BLITZ_USA_MAP.md)
+
 ### Other
 - [x] Dark themed PySide6 interface with sidebar navigation and full menus
 - [x] Settings persisted outside the installation directory
@@ -96,8 +109,11 @@ says so in the application — no placeholder that looks functional.
 
 ## Not implemented
 
-- [ ] **Any verified NFL Blitz address.** The four shipped Blitz definitions
-      are stubs; every entry is marked `undiscovered`. This is deliberate.
+- [ ] **NFL Blitz gameplay constants.** Pass distance, speed, gravity, tackle
+      power and the rest are declared but every one still has a null address
+      and is marked `undiscovered`. No guesses are shipped.
+- [ ] **NFL Blitz 2000 / 2001 / Special Edition data.** Those definitions are
+      still stubs; nobody has dumped and mapped them here.
 - [ ] **Graphics Editor.** Texture locations and formats in NFL Blitz are
       unknown, and N64 titles often store graphics inside compressed archives
       rather than at fixed addresses. The page states what it needs first.

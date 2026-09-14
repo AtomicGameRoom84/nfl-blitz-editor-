@@ -25,19 +25,132 @@ def test_bundled_definitions_all_load(builtin_games_dir):
     assert "nfl_blitz_1997" in database.definitions
 
 
-def test_blitz_definitions_claim_no_verified_addresses(builtin_games_dir):
-    """The shipped NFL Blitz files must not contain guessed addresses."""
+def test_no_definition_ships_a_guessed_gameplay_address(builtin_games_dir):
+    """Scalar gameplay entries must never carry an unverified address."""
     database = AddressDatabase(builtin_dir=builtin_games_dir).load_all()
     for definition in database.all():
-        if not definition.id.startswith("nfl_blitz"):
-            continue
-        assert definition.discovered_count == 0, (
-            f"{definition.id} ships an address that has not been verified"
-        )
+        if definition.id == "demo_rom":
+            continue  # the demo ROM is generated from its own definition
         for entry in definition.entries:
-            assert entry.confidence == "undiscovered"
-        for table in definition.tables:
-            assert not table.is_discovered
+            if entry.address is None:
+                assert entry.confidence == "undiscovered"
+            else:
+                assert entry.confidence != "undiscovered", (
+                    f"{definition.id}:{entry.id} has an address but is unmarked"
+                )
+
+
+def test_discovered_tables_are_backed_by_a_real_dump(builtin_games_dir):
+    """A table may only claim to be located if its ROM was fingerprinted.
+
+    This is what stops a plausible-looking guess being shipped: to mark a
+    table discovered you must also have recorded the SHA-1 or boot CRC of the
+    dump you verified it against.
+    """
+    database = AddressDatabase(builtin_dir=builtin_games_dir).load_all()
+    for definition in database.all():
+        if definition.id == "demo_rom":
+            continue
+        located = [t for t in definition.tables if t.is_discovered]
+        if not located:
+            continue
+        fingerprinted = bool(
+            definition.identification.sha1 or definition.identification.crc_pairs
+        )
+        assert fingerprinted, (
+            f"{definition.id} marks {len(located)} table(s) located but carries "
+            "no verified ROM fingerprint"
+        )
+        for table in located:
+            assert table.confidence == "confirmed"
+            assert table.notes.strip(), f"{definition.id}:{table.id} needs notes"
+
+
+def test_unmapped_blitz_versions_stay_empty(builtin_games_dir):
+    """The versions nobody has dumped here must still declare nothing."""
+    database = AddressDatabase(builtin_dir=builtin_games_dir).load_all()
+    for definition_id in ("nfl_blitz_2000", "nfl_blitz_2001",
+                          "nfl_blitz_special_edition"):
+        definition = database.get(definition_id)
+        assert definition.discovered_count == 0
+        assert all(not t.is_discovered for t in definition.tables)
+        assert not definition.identification.sha1
+
+
+def test_nfl_blitz_usa_tables_are_described(builtin_games_dir):
+    """The structure verified against a real USA cartridge dump."""
+    definition = AddressDatabase(builtin_dir=builtin_games_dir).load_all().get(
+        "nfl_blitz_1997"
+    )
+    assert definition.identification.crc_pairs == [[0xD094B170, 0xD7C4B5CC]]
+
+    teams = definition.table("teams")
+    assert (teams.base_address, teams.record_size, teams.record_count) == (
+        0x000A7CD8, 0x40, 30
+    )
+    players = definition.table("players")
+    assert (players.base_address, players.record_size, players.record_count) == (
+        0x0009D070, 0x5C, 480
+    )
+    # 30 teams x 16 players, grouped positionally.
+    assert players.group_size == 16
+    assert players.group_count == 30
+    assert players.group_of(7 * 16 + 3) == 7
+
+    # The team table's roster pointers must land on the player table, using
+    # the RAM-to-ROM delta recorded in the definition's notes.
+    assert "0x80241368" in definition.notes
+
+    number = players.field("number")
+    assert number.kind == "bcd"
+    position = players.field("position")
+    assert position.options["values"]["0"] == "QB"
+    assert position.options["values"]["3"] == "TE"
+
+    # Player fields must stop before the team table, which begins immediately
+    # after the last player record's declared data.
+    last_record = players.base_address + players.record_size * (players.record_count - 1)
+    end_of_fields = last_record + max(f.offset + f.size for f in players.fields)
+    assert end_of_fields <= teams.base_address
+
+
+def test_every_shipped_definition_is_structurally_valid(builtin_games_dir):
+    database = AddressDatabase(builtin_dir=builtin_games_dir).load_all()
+    assert database.load_errors == []
+    for definition in database.all():
+        assert definition.validate() == [], definition.id
+
+
+def test_validator_catches_overlapping_and_overrunning_fields():
+    from core.address_db import FieldDefinition, TableDefinition
+
+    definition = GameDefinition(
+        id="x",
+        game="X",
+        tables=[
+            TableDefinition(
+                id="t", name="T", base_address=0, record_size=8, record_count=4,
+                group_size=3,
+                fields=[
+                    FieldDefinition(id="a", name="A", offset=0, data_type=DataType.U32),
+                    FieldDefinition(id="b", name="B", offset=2, data_type=DataType.U32),
+                    FieldDefinition(id="c", name="C", offset=6, data_type=DataType.U32),
+                ],
+            )
+        ],
+    )
+    problems = " | ".join(definition.validate())
+    assert "overlap" in problems
+    assert "past the" in problems
+    assert "does not divide" in problems
+
+
+def test_validator_rejects_an_address_free_entry_claiming_confidence():
+    definition = GameDefinition(
+        id="x", game="X",
+        entries=[ValueEntry(id="e", name="E", address=None, confidence="confirmed")],
+    )
+    assert any("no address but claims confidence" in p for p in definition.validate())
 
 
 def test_demo_definition_matches_the_demo_rom(builtin_games_dir, demo_rom_bytes):

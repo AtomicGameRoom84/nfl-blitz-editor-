@@ -158,6 +158,51 @@ COMMON_TYPES = (
 )
 
 
+def bcd_decode(raw: int) -> int:
+    """Read a binary-coded-decimal value as the number it displays.
+
+    Each nibble holds one decimal digit, so ``0x22`` means twenty-two, not
+    thirty-four. NFL Blitz stores jersey numbers this way.
+
+    Raises ``ValueError`` on a nibble above 9, which would not be valid BCD.
+    """
+    if raw < 0:
+        raise ValueError(f"BCD values cannot be negative: {raw}")
+    value = 0
+    multiplier = 1
+    while raw:
+        digit = raw & 0xF
+        if digit > 9:
+            raise ValueError(
+                f"0x{raw:X} is not valid BCD: nibble 0x{digit:X} is above 9"
+            )
+        value += digit * multiplier
+        multiplier *= 10
+        raw >>= 4
+    return value
+
+
+def bcd_encode(value: int, size: int = 1) -> int:
+    """Encode a decimal number as binary-coded decimal.
+
+    ``size`` is the number of bytes available, which bounds the value at two
+    decimal digits per byte.
+    """
+    value = int(value)
+    limit = 10 ** (size * 2) - 1
+    if not 0 <= value <= limit:
+        raise ValueError(
+            f"{value} does not fit in {size} BCD byte(s) (0..{limit})"
+        )
+    raw = 0
+    shift = 0
+    while value:
+        raw |= (value % 10) << shift
+        value //= 10
+        shift += 4
+    return raw
+
+
 def parse_number(text: str) -> int:
     """Parse a user-entered integer in decimal, hex (``0x``/``$``) or binary.
 

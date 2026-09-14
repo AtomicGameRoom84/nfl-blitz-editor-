@@ -2,21 +2,31 @@
   "schema_version": 1,
   "id": "nfl_blitz_1997",
   "game": "NFL Blitz",
-  "version_label": "N64 (USA) - unverified",
+  "version_label": "N64 (USA)",
   "platform": "N64",
-  "notes": "The original NFL Blitz for Nintendo 64.\n\nSTUB DEFINITION. No addresses in this file have been verified, so every entry below is marked 'undiscovered' and the data editors will report themselves unavailable. That is intentional: this suite does not ship guessed addresses.\n\nIdentification is heuristic - it matches on the ROM's internal name only, because no verified CRC values for this title are bundled. After loading your own legally obtained dump, use ROM Manager -> 'Register this ROM's fingerprint' to record its CRC and SHA-1 into your personal copy of this definition, which makes future matching exact.\n\nTo fill this in, see docs/DISCOVERING_ADDRESSES.md.",
+  "notes": "NFL Blitz for Nintendo 64, USA cartridge. Internal name 'NFL BLITZ', game code NBZE, 16 MiB, CIC-6102, boot checksum D094B170/D7C4B5CC.\n\nTEAMS AND ROSTERS ARE MAPPED AND CONFIRMED. Both tables were located by string search and verified structurally: every roster pointer in the team table resolves exactly onto its own player block, all 480 jersey numbers are valid BCD, and the position codes line up with the real 1998 positions of every named player.\n\nGAMEPLAY CONSTANTS ARE NOT MAPPED. Every entry below still has a null address and is marked 'undiscovered'. Finding them needs before/after dumps taken around a single in-game change -- see docs/DISCOVERING_ADDRESSES.md.\n\nRAM to ROM mapping for this build: rom_offset = ram_address - 0x80241368. Derived from the 30 team roster pointers and confirmed against all of them. Useful with the Pointer Finder, which accepts a load base.",
   "identification": {
-    "sha1": [],
-    "crc_pairs": [],
-    "cartridge_ids": [],
+    "sha1": [
+      "2853afd9e38d63d913c8484f546804708c8ad712"
+    ],
+    "crc_pairs": [
+      [
+        "0xD094B170",
+        "0xD7C4B5CC"
+      ]
+    ],
+    "cartridge_ids": [
+      "BZ"
+    ],
     "region_codes": [
       "E"
     ],
     "internal_name_matches": [
-      "(?i)^\\s*(nfl\\s*)?blitz\\s*$",
-      "(?i)blitz"
+      "(?i)^\\s*nfl\\s*blitz\\s*$"
     ],
-    "rom_sizes": []
+    "rom_sizes": [
+      16777216
+    ]
   },
   "entries": [
     {
@@ -491,23 +501,326 @@
   "tables": [
     {
       "id": "teams",
-      "name": "Team table",
-      "base_address": null,
-      "record_size": 0,
-      "record_count": 0,
-      "confidence": "undiscovered",
-      "fields": [],
-      "notes": "Not yet located. Populate base_address, record_size, record_count and fields (city, nickname, abbreviation, primary_color, secondary_color, logo_id) to enable the Team Editor."
+      "name": "Teams",
+      "base_address": 687320,
+      "record_size": 64,
+      "record_count": 30,
+      "confidence": "confirmed",
+      "notes": "30 records of 0x40 bytes at 0x000A7CD8, ending at 0x000A8458. Verified by decoding every record: all 30 city/nickname pairs are the 1998 NFL, in alphabetical order by city, and every roster_pointer resolves exactly onto its own 0x5C0 roster block.\n\nThe five rating bars run 0..5. rating_passing and rating_rushing are identified with high confidence (every elite-QB team of the 1997 season -- Miami/Marino, SF/Young, GB/Favre, Denver/Elway, NE/Bledsoe, Dallas/Aikman -- scores 5 in the first, and Detroit/Barry Sanders scores 5 in the second, while Chicago and Indianapolis score 0 in the first). The remaining three bars are located and editable but their on-screen labels are not confirmed.",
+      "fields": [
+        {
+          "id": "city",
+          "name": "City",
+          "offset": 32,
+          "data_type": "u8",
+          "endian": "big",
+          "kind": "text",
+          "length": 16,
+          "notes": "NUL padded ASCII, e.g. 'Arizona'."
+        },
+        {
+          "id": "nickname",
+          "name": "Nickname",
+          "offset": 16,
+          "data_type": "u8",
+          "endian": "big",
+          "kind": "text",
+          "length": 16,
+          "notes": "NUL padded ASCII, e.g. 'Cardinals'."
+        },
+        {
+          "id": "abbreviation",
+          "name": "City abbreviation",
+          "offset": 48,
+          "data_type": "u8",
+          "endian": "big",
+          "kind": "text",
+          "length": 4,
+          "notes": "Three characters, e.g. 'ARZ', 'G.B'."
+        },
+        {
+          "id": "nickname_abbreviation",
+          "name": "Nickname abbreviation",
+          "offset": 52,
+          "data_type": "u8",
+          "endian": "big",
+          "kind": "text",
+          "length": 4,
+          "notes": "Three characters, e.g. 'CAR'."
+        },
+        {
+          "id": "rating_passing",
+          "name": "Passing rating",
+          "offset": 0,
+          "data_type": "u16",
+          "endian": "big",
+          "kind": "number",
+          "notes": "Bar 1 of 5. Correlates strongly with 1997 quarterback quality.",
+          "minimum": 0,
+          "maximum": 5
+        },
+        {
+          "id": "rating_rushing",
+          "name": "Rushing rating",
+          "offset": 2,
+          "data_type": "u16",
+          "endian": "big",
+          "kind": "number",
+          "notes": "Bar 2 of 5. Correlates strongly with 1997 running back quality.",
+          "minimum": 0,
+          "maximum": 5
+        },
+        {
+          "id": "rating_3",
+          "name": "Team rating 3",
+          "offset": 4,
+          "data_type": "u16",
+          "endian": "big",
+          "kind": "number",
+          "notes": "Bar 3 of 5. Possibly receiving; label not confirmed.",
+          "minimum": 0,
+          "maximum": 5
+        },
+        {
+          "id": "rating_4",
+          "name": "Team rating 4",
+          "offset": 6,
+          "data_type": "u16",
+          "endian": "big",
+          "kind": "number",
+          "notes": "Bar 4 of 5. Possibly defence; label not confirmed.",
+          "minimum": 0,
+          "maximum": 5
+        },
+        {
+          "id": "rating_5",
+          "name": "Team rating 5",
+          "offset": 8,
+          "data_type": "u16",
+          "endian": "big",
+          "kind": "number",
+          "notes": "Bar 5 of 5. Possibly special teams; label not confirmed.",
+          "minimum": 0,
+          "maximum": 5
+        },
+        {
+          "id": "overall",
+          "name": "Overall value",
+          "offset": 14,
+          "data_type": "u16",
+          "endian": "big",
+          "kind": "number",
+          "notes": "Ranges 3..11 and tracks 1997 team strength (Green Bay 11; Chicago, Indianapolis and St. Louis 3). Exact meaning unconfirmed.",
+          "minimum": 0,
+          "maximum": 15
+        },
+        {
+          "id": "flag_3c",
+          "name": "Unknown flag (0x3C)",
+          "offset": 60,
+          "data_type": "u8",
+          "endian": "big",
+          "kind": "number",
+          "notes": "0 or 1, 13 teams zero and 17 one. Not conference. Meaning unknown.",
+          "minimum": 0,
+          "maximum": 1
+        },
+        {
+          "id": "roster_pointer",
+          "name": "Roster pointer (RAM)",
+          "offset": 56,
+          "data_type": "u32",
+          "endian": "big",
+          "kind": "number",
+          "notes": "KSEG0 address of this team's 0x5C0 roster block. ROM offset = this value - 0x80241368. Editing this repoints the team at a different roster; leave it alone unless that is the intent."
+        },
+        {
+          "id": "reserved_0a",
+          "name": "Reserved (0x0A)",
+          "offset": 10,
+          "data_type": "u16",
+          "endian": "big",
+          "kind": "number",
+          "notes": "Zero in all 30 records.",
+          "minimum": 0,
+          "maximum": 0
+        },
+        {
+          "id": "reserved_0c",
+          "name": "Reserved (0x0C)",
+          "offset": 12,
+          "data_type": "u16",
+          "endian": "big",
+          "kind": "number",
+          "notes": "Zero in all 30 records.",
+          "minimum": 0,
+          "maximum": 0
+        }
+      ]
     },
     {
       "id": "players",
-      "name": "Player table",
-      "base_address": null,
-      "record_size": 0,
-      "record_count": 0,
-      "confidence": "undiscovered",
-      "fields": [],
-      "notes": "Not yet located. Populate base_address, record_size, record_count and fields (name, number, position, team, speed, strength, ...) to enable the Roster Editor."
+      "name": "Players",
+      "base_address": 643184,
+      "record_size": 92,
+      "record_count": 480,
+      "group_size": 16,
+      "confidence": "confirmed",
+      "notes": "480 records of 0x5C bytes at 0x0009D070: 30 teams x 16 players, one 0x5C0 block per team, in the same order as the team table. Team membership is positional -- there is no team field -- so players cannot be reassigned by editing a value.\n\nSlots are fixed by role: 0-2 offensive line, 3 quarterback, 4-6 skill players, 7-9 defensive line, 10-13 linebackers and defensive backs, 14-15 kickers. 270 of the 480 carry real names; the linemen are anonymous.\n\nJersey numbers are binary-coded decimal: 0x22 is 22, not 34. Verified against all 480 records (every one is valid BCD) and against known 1998 numbers -- Aikman 0x08, Emmitt Smith 0x22, Irvin 0x88, Favre 0x04, Rice 0x80.\n\nThe 24 bytes from +0x44 to the end of each record are zero in all 480 records and are not declared.",
+      "fields": [
+        {
+          "id": "first_name",
+          "name": "First name",
+          "offset": 52,
+          "data_type": "u8",
+          "endian": "big",
+          "kind": "text",
+          "length": 16,
+          "notes": "NUL padded ASCII."
+        },
+        {
+          "id": "name",
+          "name": "Last name",
+          "offset": 36,
+          "data_type": "u8",
+          "endian": "big",
+          "kind": "text",
+          "length": 16,
+          "notes": "NUL padded ASCII."
+        },
+        {
+          "id": "number",
+          "name": "Jersey number",
+          "offset": 12,
+          "data_type": "u32",
+          "endian": "big",
+          "kind": "bcd",
+          "notes": "Binary-coded decimal.",
+          "minimum": 0,
+          "maximum": 99
+        },
+        {
+          "id": "position",
+          "name": "Position",
+          "offset": 16,
+          "data_type": "u32",
+          "endian": "big",
+          "kind": "enum",
+          "options": {
+            "values": {
+              "0": "QB",
+              "1": "WR",
+              "2": "RB",
+              "3": "TE",
+              "4": "OL",
+              "5": "K",
+              "6": "LB",
+              "7": "CB",
+              "8": "DL",
+              "9": "S"
+            }
+          },
+          "notes": "Confirmed by cross-checking named players against their real 1998 positions: TE covers Shannon Sharpe, Tony Gonzalez and Ben Coates; K covers Morten Andersen and Matt Stover; CB covers Rod Woodson and Aeneas Williams."
+        },
+        {
+          "id": "portrait_id",
+          "name": "Portrait / head ID",
+          "offset": 20,
+          "data_type": "u32",
+          "endian": "big",
+          "kind": "number",
+          "notes": "Non-zero only for star players, who had scanned faces. 0 means a generic head.",
+          "minimum": 0,
+          "maximum": 2000
+        },
+        {
+          "id": "has_name",
+          "name": "Has real identity",
+          "offset": 24,
+          "data_type": "u32",
+          "endian": "big",
+          "kind": "number",
+          "notes": "1 for every record carrying a name, 0 for the anonymous linemen.",
+          "minimum": 0,
+          "maximum": 1
+        },
+        {
+          "id": "skill_slot",
+          "name": "Skill slot",
+          "offset": 32,
+          "data_type": "u32",
+          "endian": "big",
+          "kind": "number",
+          "notes": "4=QB, 5=RB, 6=WR1, 7=WR2 on offence; 0 elsewhere.",
+          "minimum": 0,
+          "maximum": 15
+        },
+        {
+          "id": "model_scale",
+          "name": "Model scale",
+          "offset": 0,
+          "data_type": "f32",
+          "endian": "big",
+          "kind": "number",
+          "notes": "1.05 in all 480 records. Almost certainly the player model size multiplier, but since nothing in the ROM varies it, the effect is untested.",
+          "minimum": 0.1,
+          "maximum": 4.0
+        },
+        {
+          "id": "unknown_04",
+          "name": "Unknown (0x04)",
+          "offset": 4,
+          "data_type": "u32",
+          "endian": "big",
+          "kind": "number",
+          "notes": "",
+          "minimum": 0,
+          "maximum": 1
+        },
+        {
+          "id": "unknown_08",
+          "name": "Unknown (0x08)",
+          "offset": 8,
+          "data_type": "u32",
+          "endian": "big",
+          "kind": "number",
+          "notes": "",
+          "minimum": 0,
+          "maximum": 1
+        },
+        {
+          "id": "unknown_1c",
+          "name": "Unknown (0x1C)",
+          "offset": 28,
+          "data_type": "u32",
+          "endian": "big",
+          "kind": "number",
+          "notes": "",
+          "minimum": 0,
+          "maximum": 1
+        }
+      ]
+    },
+    {
+      "id": "cities_uppercase",
+      "name": "Cities (upper case)",
+      "base_address": 689256,
+      "record_size": 16,
+      "record_count": 30,
+      "confidence": "confirmed",
+      "notes": "A second, upper-case city table at 0x000A8468, same order as the team table, used where the game needs a short all-caps name. Note three entries differ from the team table's city field: 'N.Y. GIANTS', 'N.Y. JETS' and 'SAN FRAN.'.",
+      "fields": [
+        {
+          "id": "city_upper",
+          "name": "City (upper case)",
+          "offset": 0,
+          "data_type": "u8",
+          "endian": "big",
+          "kind": "text",
+          "length": 16,
+          "notes": ""
+        }
+      ]
     },
     {
       "id": "textures",
@@ -517,7 +830,7 @@
       "record_count": 0,
       "confidence": "undiscovered",
       "fields": [],
-      "notes": "Not yet located. N64 titles frequently store textures inside compressed archives rather than at fixed addresses; this may end up needing a container parser rather than a flat table."
+      "notes": "Not yet located. The ROM is 32% printable bytes, which suggests most assets are compressed or packed in archives; a filename table referencing Midway .wms assets sits around 0x00124C60 and is probably the way in."
     }
   ]
 }

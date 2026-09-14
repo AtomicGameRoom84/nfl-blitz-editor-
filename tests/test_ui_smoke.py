@@ -20,7 +20,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 pytest.importorskip("PySide6.QtWidgets", reason="PySide6 is not installed")
 
-from PySide6.QtWidgets import QApplication  # noqa: E402
+from PySide6.QtWidgets import QApplication, QSpinBox  # noqa: E402
 
 from core.bookmarks import Bookmark  # noqa: E402
 from core.datatypes import DataType  # noqa: E402
@@ -210,3 +210,59 @@ def test_pages_survive_closing_the_rom(window, qt_app):
         qt_app.processEvents()
     assert not window.state.rom.is_loaded
     assert window.windowTitle() == "NFL Blitz Mod Suite"
+
+
+# -- wide integer fields --------------------------------------------------
+
+
+def test_wide_fields_do_not_use_a_spin_box(qt_app):
+    """An unsigned 32-bit field must not go through a QSpinBox.
+
+    Qt spin boxes top out at 2**31-1, so a KSEG0 pointer like 0x802DE3D8
+    would be clamped and the ROM corrupted on save.
+    """
+    from ui.widgets.number_edit import NumberEdit, fits_in_spinbox
+
+    assert fits_in_spinbox(0, 99)
+    assert fits_in_spinbox(-100, 100)
+    assert not fits_in_spinbox(0, 0xFFFFFFFF)
+
+    edit = NumberEdit()
+    edit.setValue(0x802DE3D8)
+    assert edit.text() == "0x802DE3D8"
+    assert edit.value() == 0x802DE3D8
+    edit.setText("2148274136")
+    assert edit.value() == 2148274136
+
+
+def test_wide_field_reports_a_typo_instead_of_writing_zero(qt_app):
+    from ui.widgets.number_edit import NumberEdit
+
+    edit = NumberEdit()
+    edit.setText("not a number")
+    with pytest.raises(ValueError):
+        edit.value()
+
+
+def test_team_page_uses_a_number_edit_for_a_pointer_field(window, qt_app, builtin_games_dir):
+    """Drive the real NFL Blitz table layout through the Team Editor form."""
+    from core.address_db import GameDefinition
+    from ui.widgets.number_edit import NumberEdit
+
+    blitz = GameDefinition.load(builtin_games_dir / "nfl_blitz_1997.json")
+    # Point the team table somewhere inside the demo ROM so the editor runs;
+    # the values read are meaningless, the widget wiring is what is under test.
+    blitz.table("teams").base_address = 0x2000
+    blitz.table("teams").record_count = 4
+    blitz.table("players").base_address = 0x4000
+    blitz.table("players").record_count = 16
+    blitz.table("cities_uppercase").base_address = 0x9000
+    blitz.table("cities_uppercase").record_count = 1
+    window.state.set_definition(blitz)
+    window.navigate("teams")
+    qt_app.processEvents()
+
+    page = window.page("teams")
+    assert page.editor.availability()
+    assert isinstance(page._controls["roster_pointer"], NumberEdit)
+    assert isinstance(page._controls["rating_passing"], QSpinBox)

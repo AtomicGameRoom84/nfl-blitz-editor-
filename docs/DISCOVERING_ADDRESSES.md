@@ -2,12 +2,23 @@
 
 This is the document the whole suite is built around.
 
-NFL Blitz on N64 has not been publicly reverse engineered, so this project
-ships **zero** verified addresses for it. Rather than guessing — which would
-produce an editor that looks like it works and quietly corrupts your ROM —
-the data editors stay switched off and tell you what they are missing.
+## What is already mapped
 
-This guide is how you switch them on.
+For the **USA cartridge** (`NBZE`, boot CRC `D094B170/D7C4B5CC`) the team
+table, player table and upper-case city table are mapped, verified and
+editable — see [NFL_BLITZ_USA_MAP.md](NFL_BLITZ_USA_MAP.md). Load that ROM and
+the Team and Roster editors just work.
+
+What is **not** mapped, on any version: every gameplay constant — pass
+distance, running speed, ball gravity, tackle power — plus all graphics, and
+the whole of NFL Blitz 2000, 2001 and Special Edition. Those entries ship with
+a null address and render as inactive rows rather than as sliders that would
+quietly write to the wrong place.
+
+This guide is how you close those gaps.
+
+Useful starting point for the USA cartridge: `rom_offset = ram_address -
+0x80241368`. The Pointer Finder takes that as a load base.
 
 ---
 

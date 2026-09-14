@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional
 
 from core.address_db import FieldDefinition, GameDefinition, TableDefinition
+from core.datatypes import bcd_decode, bcd_encode
 from core.rom_manager import ROMManager
 from editors.base import AVAILABLE, Availability, EditorModule
 
@@ -123,7 +124,16 @@ class TableEditor(EditorModule):
         offset = table.record_offset(index) + field.offset
         if field.kind == "text":
             return self.rom.read_text(offset, field.size)
-        return self.rom.read_value(offset, field.data_type, field.endian)
+        raw = self.rom.read_value(offset, field.data_type, field.endian)
+        if field.kind == "bcd":
+            # Stored as binary-coded decimal: 0x22 displays as 22, not 34.
+            try:
+                return bcd_decode(int(raw))
+            except ValueError:
+                # Corrupt or mis-mapped data: show the raw value rather than
+                # refusing to display the record at all.
+                return int(raw)
+        return raw
 
     def read_record(self, index: int) -> Record:
         table = self._require_available()
@@ -149,10 +159,24 @@ class TableEditor(EditorModule):
         label = f"{table.name} #{index}: {field.name} = {value}"
         if field.kind == "text":
             self.rom.write_text(offset, str(value), field.size, description=label)
-        else:
-            self.rom.write_value(
-                offset, value, field.data_type, field.endian, description=label
+            return
+        if field.kind == "bcd":
+            value = self._check_bounds(field, int(value))
+            value = bcd_encode(value, field.data_type.size)
+        self.rom.write_value(
+            offset, value, field.data_type, field.endian, description=label
+        )
+
+    @staticmethod
+    def _check_bounds(field: FieldDefinition, value: float) -> float:
+        """Reject a value the field declares out of range."""
+        low, high = field.minimum, field.maximum
+        if (low is not None and value < low) or (high is not None and value > high):
+            raise ValueError(
+                f"{value} is outside the allowed range for {field.name} "
+                f"({low}..{high})"
             )
+        return value
 
     def write_record(self, index: int, values: Dict[str, Any]) -> None:
         """Write several fields of one record as a single undo step."""
@@ -232,7 +256,10 @@ def parse_field_cell(field: FieldDefinition, raw: str, source: str, line: int) -
     try:
         if field.data_type.is_float:
             return float(raw)
-        return int(raw, 0)
+        # BCD cells are written as the number they display, so parse them as
+        # plain decimal rather than letting a leading zero look like an octal
+        # or hex prefix.
+        return int(raw, 10) if field.kind == "bcd" else int(raw, 0)
     except ValueError as exc:
         raise ValueError(
             f"{source} line {line}: {raw!r} is not a valid value for "

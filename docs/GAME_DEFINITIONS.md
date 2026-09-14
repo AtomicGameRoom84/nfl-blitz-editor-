@@ -75,9 +75,10 @@ specific definition beats a general one. That is why a ROM named
 `NFL BLITZ 2000` matches `nfl_blitz_2000` rather than tying with the base
 game's catch-all `(?i)blitz`.
 
-The shipped NFL Blitz files carry **no** `sha1` or `crc_pairs`, because this
-project has not verified any dump. Use **ROM Manager → Register this ROM's
-fingerprint** to add your own.
+`games/nfl_blitz_1997.json` carries a real `sha1` and `crc_pairs`, verified
+against a USA cartridge dump. The other Blitz files carry none, because no
+dump of those versions has been verified here — use **ROM Manager → Register
+this ROM's fingerprint** to add your own.
 
 ---
 
@@ -160,6 +161,17 @@ Teams, rosters and anything else stored as a fixed-stride array.
 }
 ```
 
+### `group_size`
+
+Optional. When records are stored in fixed blocks — NFL Blitz keeps 16 players
+per team, with no team field in the record — set `group_size` to the block
+size. The Roster Editor then derives team membership from a player's position
+in the table, and correctly refuses to "move" a player between teams, since
+that would mean swapping records rather than editing a value.
+
+`group_size` must divide `record_count`; the definition validator reports it
+if it does not.
+
 A table is only used when `base_address`, `record_size`, `record_count` and
 `fields` are all present; otherwise the editor reports exactly which of the
 four is missing. A table that would run past the end of the loaded ROM is also
@@ -173,6 +185,11 @@ refused, since that means the definition is for a different build.
 | `text` | Line edit | Needs `length` (bytes). Written in place, NUL padded; a value that does not fit is **refused**, not truncated. |
 | `enum` | Drop-down / label | `options.values` maps the raw number (as a string key) to a label. Roster cells accept either the label or the number. |
 | `color` | Colour picker | 2 bytes = RGBA5551, 4 bytes = RGBA8888. Any other size is refused rather than guessed. |
+| `bcd` | Spin box / editable cell | Binary-coded decimal: each nibble is one decimal digit, so `0x22` means 22, not 34. NFL Blitz stores jersey numbers this way. The editor shows and accepts the number a human would write; CSV cells are plain decimal. |
+
+A field whose range does not fit in a signed 32-bit spin box — an unsigned
+32-bit pointer, say — is rendered as a hex/decimal text box instead, because a
+spin box would silently clamp it and corrupt the ROM.
 
 ### Table ids the editors look for
 
@@ -196,6 +213,14 @@ numeric non-structural field as a rating automatically.
 4. Add entries and tables as you discover them.
 5. **Tools → Reload game definitions**, or restart.
 
+### Validation
+
+Every definition is checked on load and problems are reported in ROM Manager
+without stopping the other files from loading. The checks are: duplicate entry
+or table ids, fields that overrun the record, fields that overlap each other,
+`enum` fields with no values, a `group_size` that does not divide
+`record_count`, unknown confidence levels, and — the important one — an entry
+with no address that nevertheless claims a confidence above `undiscovered`.
+
 Files with a `schema_version` higher than this build understands are refused
-with a clear message rather than half-parsed, and a malformed file is reported
-in ROM Manager without stopping the others from loading.
+with a clear message rather than half-parsed.

@@ -6,11 +6,11 @@
 | --- | --- | --- |
 | 1 | Application shell, ROM loading, validation, backups, Save As | **Done** |
 | 2 | Hex/Data Explorer, search, bookmarks, byte editing, undo/redo | **Done** |
-| 3 | Team and Roster editors, data models, CSV, address database | **Done** — code complete, inert until NFL Blitz tables are located |
-| 4 | Gameplay Values editor, sliders, bookmarking, definitions | **Done** — same caveat |
+| 3 | Team and Roster editors, data models, CSV, address database | **Done** — and live on the USA cartridge |
+| 4 | Gameplay Values editor, sliders, bookmarking, definitions | **Done** — inert until constants are located |
 | 5 | Graphics editor, texture extraction and conversion | **Not started** — blocked on asset discovery |
 | 6 | ROM comparison and Patch Builder | **Done** |
-| 7 | NFL Blitz-specific reverse-engineered definitions | **Open** — the real work |
+| 7 | NFL Blitz-specific reverse-engineered definitions | **In progress** — teams and rosters mapped; gameplay constants outstanding |
 
 Phases 3, 4 and 6 were pulled forward past the original Phase 1–2 brief
 because ROM comparison plus bookmarks is what makes the discovery work
@@ -22,8 +22,15 @@ demo cartridge, so when Blitz addresses are found they drop into working code.
 
 ## Phase 7 — reverse engineering NFL Blitz
 
-This is the long pole, and it is a research project rather than a programming
-one. A sensible order:
+**Done so far** (USA cartridge, see [NFL_BLITZ_USA_MAP.md](NFL_BLITZ_USA_MAP.md)):
+the team table at `0x000A7CD8`, the player table at `0x0009D070`, the
+upper-case city table at `0x000A8468`, and the RAM↔ROM delta `0x80241368`.
+Steps 1–3 below are complete for that build.
+
+**Outstanding**: the gameplay constants (step 4), graphics (Phase 5), and
+every other NFL Blitz version.
+
+This is a research project rather than a programming one. A sensible order:
 
 ### 1. Establish a baseline
 

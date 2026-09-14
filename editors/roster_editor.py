@@ -17,6 +17,7 @@ from typing import Any, Iterable, List, Optional
 from editors.table_editor import Record, TableEditor
 
 NAME = "name"
+FIRST_NAME = "first_name"
 NUMBER = "number"
 POSITION = "position"
 TEAM = "team"
@@ -32,16 +33,42 @@ class RosterEditor(TableEditor):
 
     # -- queries -----------------------------------------------------------
 
+    def team_of(self, player_index: int) -> Optional[int]:
+        """Which team a player belongs to, or ``None`` if the ROM does not say."""
+        table = self.table
+        if table is None:
+            return None
+        if table.field(TEAM) is not None:
+            return self.read_record(player_index).get(TEAM)
+        if table.group_size > 0:
+            return table.group_of(player_index)
+        return None
+
     def players_for_team(self, team_index: int) -> List[Record]:
-        """Records whose ``team`` field matches, or every record if untracked."""
+        """Every player on one team.
+
+        Some ROMs store an explicit team field; others -- NFL Blitz among them
+        -- store a fixed number of players per team so membership is purely
+        positional. Both are handled; when neither applies, every record is
+        returned rather than silently showing an empty roster.
+        """
         table = self._require_available()
-        if table.field(TEAM) is None:
-            return list(self.records())
-        return [r for r in self.records() if r.get(TEAM) == team_index]
+        if table.field(TEAM) is not None:
+            return [r for r in self.records() if r.get(TEAM) == team_index]
+        if table.group_size > 0:
+            first = team_index * table.group_size
+            last = min(first + table.group_size, table.record_count)
+            return [self.read_record(i) for i in range(first, last)]
+        return list(self.records())
 
     def player_label(self, record: Record) -> str:
+        """A readable one-line name, using whatever fields the ROM declares."""
         number = record.get(NUMBER)
-        name = str(record.get(NAME, "") or "").strip() or f"Player {record.index}"
+        surname = str(record.get(NAME, "") or "").strip()
+        given = str(record.get(FIRST_NAME, "") or "").strip()
+        name = " ".join(part for part in (given, surname) if part)
+        if not name:
+            name = f"Player {record.index}"
         position = record.get(POSITION)
         parts = []
         if number is not None:
@@ -66,9 +93,16 @@ class RosterEditor(TableEditor):
         """Reassign a player, if the definition tracks team membership."""
         table = self._require_available()
         if table.field(TEAM) is None:
+            detail = (
+                " Team membership is positional here -- a player's team is "
+                "decided by their slot in the table -- so moving one would mean "
+                "swapping records, not editing a field."
+                if table.group_size > 0
+                else ""
+            )
             raise RuntimeError(
                 f"The {table.name} table has no team field, so players cannot "
-                "be moved between teams in this ROM."
+                f"be moved between teams in this ROM.{detail}"
             )
         self.write_field(player_index, TEAM, team_index)
 
@@ -135,7 +169,7 @@ class RosterEditor(TableEditor):
 
     def attribute_fields(self) -> List[str]:
         """Numeric fields that are not structural -- i.e. the ratings."""
-        structural = {NAME, NUMBER, POSITION, TEAM}
+        structural = {NAME, FIRST_NAME, NUMBER, POSITION, TEAM}
         return [
             f.id
             for f in self.fields()

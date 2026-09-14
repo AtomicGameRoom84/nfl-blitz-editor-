@@ -37,7 +37,9 @@ def test_editors_are_unavailable_without_a_definition(rom):
 
 
 def test_unlocated_table_reports_what_is_missing(rom, builtin_games_dir):
-    blitz = GameDefinition.load(builtin_games_dir / "nfl_blitz_1997.json")
+    # NFL Blitz 2000 has not been dumped and mapped here, so its team table is
+    # declared but empty.
+    blitz = GameDefinition.load(builtin_games_dir / "nfl_blitz_2000.json")
     status = TeamEditor(rom, blitz).availability()
     assert not status
     assert "not yet located" in status.reason
@@ -45,6 +47,8 @@ def test_unlocated_table_reports_what_is_missing(rom, builtin_games_dir):
 
 
 def test_undiscovered_values_report_what_is_wanted(rom, builtin_games_dir):
+    # Gameplay constants are unmapped for every NFL Blitz build, including the
+    # USA cartridge whose tables *are* mapped.
     blitz = GameDefinition.load(builtin_games_dir / "nfl_blitz_1997.json")
     editor = GameplayEditor(rom, blitz, "passing")
     status = editor.availability()
@@ -268,3 +272,95 @@ def test_generic_table_editor_works_for_any_declared_table(rom, demo_definition)
     status = missing.availability()
     assert not status
     assert "does not describe" in status.reason
+
+
+# -- BCD fields and positional team membership ----------------------------
+
+
+def _grouped_bcd_definition(rom):
+    """A definition shaped like NFL Blitz's roster: BCD numbers, no team field."""
+    from core.address_db import FieldDefinition, GameDefinition, TableDefinition
+    from core.datatypes import DataType
+
+    return GameDefinition(
+        id="grouped",
+        game="Grouped",
+        tables=[
+            TableDefinition(
+                id="players",
+                name="Players",
+                base_address=0x4000,
+                record_size=24,
+                record_count=64,
+                group_size=16,
+                confidence="confirmed",
+                fields=[
+                    FieldDefinition(
+                        id="name", name="Name", offset=0, kind="text", length=16
+                    ),
+                    FieldDefinition(
+                        id="number", name="Number", offset=16,
+                        data_type=DataType.U8, kind="bcd", minimum=0, maximum=99,
+                    ),
+                    FieldDefinition(
+                        id="speed", name="Speed", offset=19, data_type=DataType.U8
+                    ),
+                ],
+            )
+        ],
+    )
+
+
+def test_bcd_field_reads_as_the_displayed_number(rom):
+    editor = RosterEditor(rom, _grouped_bcd_definition(rom))
+    # 0x22 must read as 22, not 34.
+    rom.write_bytes(0x4000 + 16, bytes([0x22]))
+    assert editor.read_record(0).values["number"] == 22
+
+
+def test_bcd_field_writes_back_as_bcd(rom):
+    editor = RosterEditor(rom, _grouped_bcd_definition(rom))
+    editor.write_field(0, "number", 88)
+    assert rom.read_bytes(0x4000 + 16, 1) == b"\x88"
+    assert editor.read_record(0).values["number"] == 88
+
+
+def test_bcd_field_respects_declared_bounds(rom):
+    editor = RosterEditor(rom, _grouped_bcd_definition(rom))
+    with pytest.raises(ValueError, match="outside the allowed range"):
+        editor.write_field(0, "number", 150)
+
+
+def test_bcd_field_survives_corrupt_data(rom):
+    """A nibble above 9 must not stop the record being displayed."""
+    editor = RosterEditor(rom, _grouped_bcd_definition(rom))
+    rom.write_bytes(0x4000 + 16, bytes([0xAB]))
+    assert editor.read_record(0).values["number"] == 0xAB
+
+
+def test_positional_team_membership(rom):
+    editor = RosterEditor(rom, _grouped_bcd_definition(rom))
+    assert editor.record_count == 64
+    assert [r.index for r in editor.players_for_team(0)] == list(range(16))
+    assert [r.index for r in editor.players_for_team(2)] == list(range(32, 48))
+    assert editor.team_of(35) == 2
+
+
+def test_positional_membership_cannot_be_reassigned(rom):
+    editor = RosterEditor(rom, _grouped_bcd_definition(rom))
+    with pytest.raises(RuntimeError, match="positional"):
+        editor.move_to_team(0, 3)
+
+
+def test_bcd_csv_round_trip(rom, tmp_path):
+    editor = RosterEditor(rom, _grouped_bcd_definition(rom))
+    editor.write_field(0, "number", 7)
+    path = editor.export_csv(tmp_path / "players.csv")
+    # A BCD cell is written as the number it displays, and a leading zero must
+    # not be misread as an octal prefix on the way back in.
+    assert ",7," in path.read_text().splitlines()[1] + ","
+    rows = path.read_text().splitlines()
+    rows[1] = rows[1].replace(",7,", ",09,")
+    path.write_text("\n".join(rows))
+    editor.import_csv(path)
+    assert editor.read_record(0).values["number"] == 9

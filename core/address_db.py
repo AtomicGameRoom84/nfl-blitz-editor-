@@ -218,6 +218,10 @@ class TableDefinition:
     fields: List[FieldDefinition] = field(default_factory=list)
     confidence: str = "undiscovered"
     notes: str = ""
+    #: When records are grouped into fixed-size blocks -- 16 players per team,
+    #: say -- this is the block size. Membership is then positional, so there
+    #: is no team field to declare and players cannot be reassigned.
+    group_size: int = 0
 
     @property
     def is_discovered(self) -> bool:
@@ -235,6 +239,19 @@ class TableDefinition:
             raise IndexError(f"record {index} out of range for table {self.id!r}")
         return self.base_address + index * self.record_size
 
+    @property
+    def group_count(self) -> int:
+        """How many groups the records fall into (0 when they are not grouped)."""
+        if self.group_size <= 0:
+            return 0
+        return self.record_count // self.group_size
+
+    def group_of(self, index: int) -> int:
+        """Which group a record belongs to, by position."""
+        if self.group_size <= 0:
+            raise ValueError(f"table {self.id!r} does not group its records")
+        return index // self.group_size
+
     def field(self, field_id: str) -> Optional[FieldDefinition]:
         for item in self.fields:
             if item.id == field_id:
@@ -250,6 +267,7 @@ class TableDefinition:
             "record_count": self.record_count,
             "confidence": self.confidence,
             "notes": self.notes,
+            "group_size": self.group_size,
             "fields": [f.to_dict() for f in self.fields],
         }
 
@@ -267,6 +285,7 @@ class TableDefinition:
             fields=[FieldDefinition.from_dict(f) for f in payload.get("fields", [])],
             confidence=payload.get("confidence", "undiscovered"),
             notes=payload.get("notes", ""),
+            group_size=int(payload.get("group_size", 0)),
         )
 
 
@@ -407,9 +426,11 @@ class GameDefinition:
         if ident.cartridge_ids and identity.game_code[1:3] in ident.cartridge_ids:
             score += 30
             reasons.append(f"Cartridge ID {identity.game_code[1:3]!r} matches")
-        if ident.region_codes and identity.game_code[-1:] in ident.region_codes:
-            score += 10
-            reasons.append(f"Region {identity.game_code[-1:]!r} matches")
+        # The region alone says almost nothing -- every USA cartridge shares
+        # it -- so it only refines a match that some other rule already made.
+        region_matches = bool(
+            ident.region_codes and identity.game_code[-1:] in ident.region_codes
+        )
         # Earlier patterns are more specific by convention, so they score
         # higher. That is what keeps a ROM named "NFL BLITZ 2000" matching the
         # 2000 definition rather than tying with the base game's catch-all.
@@ -429,7 +450,76 @@ class GameDefinition:
 
         if score == 0:
             return None
+        if region_matches:
+            score += 10
+            reasons.append(f"Region {identity.game_code[-1:]!r} matches")
         return MatchResult(definition=self, score=score, reasons=reasons)
+
+    # -- validation --------------------------------------------------------
+
+    def validate(self) -> List[str]:
+        """Structural problems with this definition, as readable messages.
+
+        Checks what can be checked without a ROM: duplicate ids, fields that
+        overrun or overlap inside a record, enums with no values, grouping
+        that does not divide the record count. Returns an empty list when the
+        definition is sound.
+        """
+        problems: List[str] = []
+
+        seen_entries = set()
+        for entry in self.entries:
+            if entry.id in seen_entries:
+                problems.append(f"duplicate entry id {entry.id!r}")
+            seen_entries.add(entry.id)
+            if entry.confidence not in CONFIDENCE_LEVELS:
+                problems.append(
+                    f"entry {entry.id!r} has unknown confidence {entry.confidence!r}"
+                )
+            if entry.address is None and entry.confidence != "undiscovered":
+                problems.append(
+                    f"entry {entry.id!r} has no address but claims confidence "
+                    f"{entry.confidence!r}"
+                )
+
+        seen_tables = set()
+        for table in self.tables:
+            if table.id in seen_tables:
+                problems.append(f"duplicate table id {table.id!r}")
+            seen_tables.add(table.id)
+            if table.group_size and table.record_count % table.group_size:
+                problems.append(
+                    f"table {table.id!r}: group_size {table.group_size} does not "
+                    f"divide record_count {table.record_count}"
+                )
+            occupied: Dict[int, str] = {}
+            seen_fields = set()
+            for item in table.fields:
+                if item.id in seen_fields:
+                    problems.append(
+                        f"table {table.id!r}: duplicate field id {item.id!r}"
+                    )
+                seen_fields.add(item.id)
+                if item.kind == "enum" and not item.options.get("values"):
+                    problems.append(
+                        f"table {table.id!r} field {item.id!r}: enum has no values"
+                    )
+                if table.record_size and item.offset + item.size > table.record_size:
+                    problems.append(
+                        f"table {table.id!r} field {item.id!r}: ends at "
+                        f"0x{item.offset + item.size:X}, past the 0x"
+                        f"{table.record_size:X} byte record"
+                    )
+                for byte in range(item.offset, item.offset + item.size):
+                    other = occupied.get(byte)
+                    if other is not None and other != item.id:
+                        problems.append(
+                            f"table {table.id!r}: fields {other!r} and "
+                            f"{item.id!r} overlap at +0x{byte:X}"
+                        )
+                        break
+                    occupied[byte] = item.id
+        return problems
 
     # -- serialisation -----------------------------------------------------
 
@@ -515,6 +605,8 @@ class AddressDatabase:
                     self.load_errors.append(f"{path.name}: {exc}")
                     continue
                 definition.user_defined = is_user
+                for problem in definition.validate():
+                    self.load_errors.append(f"{path.name}: {problem}")
                 self.definitions[definition.id] = definition
         return self
 

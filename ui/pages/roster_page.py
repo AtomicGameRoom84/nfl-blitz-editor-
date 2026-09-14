@@ -204,6 +204,10 @@ class RosterEditorPage(Page):
                         # Show the definition's label ("QB"), not the raw byte.
                         text = self.editor.position_label(value) if field_id == "position" \
                             else str(field.options.get("values", {}).get(str(value), value))
+                    elif isinstance(value, float):
+                        # A float read back from 4 bytes prints 17 digits of
+                        # binary noise otherwise.
+                        text = f"{value:g}"
                     else:
                         text = str(value)
                     item = QTableWidgetItem(text)

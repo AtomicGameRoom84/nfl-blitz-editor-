@@ -27,6 +27,7 @@ from core.address_db import FieldDefinition
 from editors.team_editor import TeamEditor
 from ui import theme
 from ui.pages.base_page import Page, UnavailableBanner, card, field_row, hint
+from ui.widgets.number_edit import NumberEdit, fits_in_spinbox
 
 
 class ColorButton(QPushButton):
@@ -179,10 +180,14 @@ class TeamEditorPage(Page):
             for raw, label in field.options.get("values", {}).items():
                 combo.addItem(f"{label}", int(raw))
             return combo
-        box = QSpinBox()
         low = field.minimum if field.minimum is not None else field.data_type.minimum
         high = field.maximum if field.maximum is not None else field.data_type.maximum
-        box.setRange(int(low if low is not None else 0), int(high if high is not None else 2**31 - 1))
+        if not fits_in_spinbox(low, high):
+            # Unsigned 32-bit fields (pointers, for instance) overflow a spin
+            # box, which would clamp them and corrupt the ROM.
+            return NumberEdit()
+        box = QSpinBox()
+        box.setRange(int(low if low is not None else 0), int(high if high is not None else 0))
         return box
 
     # -- data --------------------------------------------------------------
@@ -206,6 +211,9 @@ class TeamEditorPage(Page):
             if isinstance(control, ColorButton):
                 rgb = self.editor.read_color(self._index, field.id)
                 control.set_rgb(rgb or (0, 0, 0))
+            elif isinstance(control, NumberEdit):
+                # Checked before QLineEdit, which it subclasses.
+                control.setValue(int(value or 0))
             elif isinstance(control, QLineEdit):
                 control.setText(str(value or ""))
             elif isinstance(control, QComboBox):
@@ -224,6 +232,9 @@ class TeamEditorPage(Page):
             control = self._controls.get(field.id)
             if isinstance(control, ColorButton):
                 colors[field.id] = control.rgb()
+            elif isinstance(control, NumberEdit):
+                # Checked before QLineEdit, which it subclasses.
+                values[field.id] = control.value()
             elif isinstance(control, QLineEdit):
                 values[field.id] = control.text()
             elif isinstance(control, QComboBox):

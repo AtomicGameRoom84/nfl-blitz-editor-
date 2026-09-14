@@ -6,13 +6,19 @@ built with Python and PySide6.
 Load a legally obtained cartridge dump, explore and edit it without touching
 hex by hand, and share your work as an IPS or BPS patch.
 
-> **The suite ships no game data and no unverified ROM addresses.**
-> Nobody has publicly reverse engineered NFL Blitz's N64 data layout, so the
-> Team, Roster and Graphics editors correctly report themselves *unavailable*
-> until a game definition describes where that data lives. Finding it is what
-> the ROM Comparison, Value Search, Bookmark and Research tools are for —
-> and once you find something, promoting a bookmark into a definition turns it
-> into a labelled slider with no code changes.
+> **Teams and rosters for the USA cartridge are mapped and working.** The
+> team table (30 teams: names, cities, abbreviations, rating bars) and the
+> player table (480 players: names, jersey numbers, positions) were reverse
+> engineered from a verified dump and are fully editable — see
+> [docs/NFL_BLITZ_USA_MAP.md](docs/NFL_BLITZ_USA_MAP.md).
+>
+> **Gameplay constants are not mapped, and the suite ships no guesses.**
+> Pass distance, speed, gravity and the rest are declared with a null address
+> and marked `undiscovered`, so they render as inactive labelled rows rather
+> than sliders that quietly write to the wrong place. Finding them is what the
+> ROM Comparison, Value Search, Bookmark and Research tools are for — and once
+> you find one, promoting a bookmark into a definition turns it into a
+> labelled slider with no code changes.
 > See [docs/DISCOVERING_ADDRESSES.md](docs/DISCOVERING_ADDRESSES.md).
 
 ---
@@ -44,8 +50,8 @@ python main.py demo.z64
 ```
 
 Open the Team, Roster and Gameplay editors and they work end to end, because
-the demo definition genuinely describes where its data lives. That is exactly
-what an NFL Blitz definition will look like once its addresses are found.
+the demo definition genuinely describes where its data lives. It doubles as a
+worked example of the definition format.
 
 ### Tests
 
@@ -106,8 +112,9 @@ ui/                         Everything Qt
 
 games/                      Game definition files (data, not code)
   demo_rom.json             Fully populated — describes the demo cartridge
-  nfl_blitz_1997.json       Stub: every address marked "undiscovered"
-  nfl_blitz_2000.json       Stub
+  nfl_blitz_1997.json       USA cartridge: teams and rosters mapped and
+                            fingerprinted; gameplay constants still undiscovered
+  nfl_blitz_2000.json       Stub — not yet dumped and mapped
   nfl_blitz_2001.json       Stub
   nfl_blitz_special_edition.json   Stub
 
@@ -132,6 +139,7 @@ Override it with the `NFL_BLITZ_SUITE_HOME` environment variable.
 
 | Document | What it covers |
 | --- | --- |
+| [docs/NFL_BLITZ_USA_MAP.md](docs/NFL_BLITZ_USA_MAP.md) | The reverse-engineered ROM map: tables, offsets, field layouts |
 | [docs/FEATURES.md](docs/FEATURES.md) | What works today versus what is planned |
 | [docs/DISCOVERING_ADDRESSES.md](docs/DISCOVERING_ADDRESSES.md) | How to find the addresses this suite does not yet know |
 | [docs/GAME_DEFINITIONS.md](docs/GAME_DEFINITIONS.md) | The definition file format, field by field |
