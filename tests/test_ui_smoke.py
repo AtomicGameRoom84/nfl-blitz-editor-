@@ -466,3 +466,108 @@ def test_table_helpers_restore_state(qt_app):
     assert not table.signalsBlocked()
 
     fit_columns(table, stretch_column=1)
+
+
+# -- patch round trip through the UI --------------------------------------
+
+
+@pytest.mark.parametrize("fmt", ["bps", "ips"])
+def test_patch_created_in_the_ui_can_be_applied_back(
+    window, qt_app, tmp_path, demo_rom_path, fmt, monkeypatch
+):
+    """Create a patch from edits, reload clean, apply it, get the edits back.
+
+    This is the flow that was broken: apply_patch fed the *working copy* to
+    the patcher instead of the ROM as loaded, so a BPS failed its source
+    checksum and an IPS looked like a no-op.
+    """
+    from PySide6.QtWidgets import QFileDialog, QMessageBox
+
+    from core.datatypes import DataType
+    from core.patch import PatchBuilder
+
+    messages = []
+    monkeypatch.setattr(
+        QMessageBox, "information", staticmethod(lambda *a, **k: messages.append(a))
+    )
+    monkeypatch.setattr(
+        QMessageBox, "critical",
+        staticmethod(lambda *a, **k: pytest.fail(f"apply reported an error: {a}")),
+    )
+    monkeypatch.setattr(
+        QMessageBox, "question", staticmethod(lambda *a, **k: QMessageBox.Yes)
+    )
+
+    state = window.state
+    state.rom.write_value(0x8000, 4242, DataType.U16)
+    target = bytes(state.rom.data)
+
+    patch_path = tmp_path / f"mod.{fmt}"
+    PatchBuilder().build_to_file(state.rom.original, target, patch_path, fmt)
+    assert patch_path.stat().st_size > 0
+
+    # Crucially, do NOT reload: apply while the working copy still has edits.
+    # That is the condition the bug needed -- feeding the working copy to the
+    # patcher made a BPS fail its source checksum and an IPS a silent no-op.
+    # A second, unrelated edit keeps the working copy distinct from both the
+    # original and the patch's target.
+    state.rom.write_value(0x9000, 1111, DataType.U16)
+    assert state.rom.is_modified
+    assert bytes(state.rom.data) != target
+
+    monkeypatch.setattr(
+        QFileDialog, "getOpenFileName",
+        staticmethod(lambda *a, **k: (str(patch_path), "")),
+    )
+    window.navigate("patch")
+    qt_app.processEvents()
+    window.page("patch").apply_patch()
+    qt_app.processEvents()
+
+    assert bytes(state.rom.data) == target, "the patch did not reproduce the edits"
+    assert state.rom.read_value(0x8000, DataType.U16) == 4242
+    # The unrelated edit is gone: a patch applies to the ROM as loaded.
+    assert state.rom.read_value(0x9000, DataType.U16) != 1111
+    assert messages, "the user was told nothing"
+
+    # And it is one undoable step. Undoing restores the working copy exactly
+    # as it stood before the patch, including the unrelated edit; the earlier
+    # 0x8000 edit is a separate step and stays applied.
+    window.undo()
+    assert state.rom.read_value(0x9000, DataType.U16) == 1111
+    assert state.rom.read_value(0x8000, DataType.U16) == 4242
+
+
+def test_applying_a_patch_for_another_rom_is_refused_clearly(
+    window, qt_app, tmp_path, monkeypatch
+):
+    from PySide6.QtWidgets import QFileDialog, QMessageBox
+
+    from core.patch import create_bps
+
+    errors = []
+    monkeypatch.setattr(
+        QMessageBox, "critical", staticmethod(lambda *a, **k: errors.append(a[2]))
+    )
+    monkeypatch.setattr(
+        QMessageBox, "question", staticmethod(lambda *a, **k: QMessageBox.Yes)
+    )
+
+    # A patch built against a completely different source.
+    other = bytes(range(256)) * 64
+    patch_path = tmp_path / "wrong.bps"
+    patch_path.write_bytes(create_bps(other, bytes(reversed(other))))
+
+    monkeypatch.setattr(
+        QFileDialog, "getOpenFileName",
+        staticmethod(lambda *a, **k: (str(patch_path), "")),
+    )
+    window.navigate("patch")
+    qt_app.processEvents()
+    before = bytes(window.state.rom.data)
+    window.page("patch").apply_patch()
+    qt_app.processEvents()
+
+    assert bytes(window.state.rom.data) == before, "the ROM was modified anyway"
+    assert errors, "the user was not told the patch was rejected"
+    assert "CRC32" in errors[0]

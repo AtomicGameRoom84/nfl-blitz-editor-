@@ -21,6 +21,7 @@ from core.patch import (
     PatchBuilder,
     PatchError,
     PatchMetadata,
+    PatchMismatchError,
     PatchTooLargeError,
 )
 from core.undo import CompositeCommand, WriteBytesCommand
@@ -291,6 +292,33 @@ class PatchPage(Page):
         lines = [f"{key}: {value}" for key, value in info.items() if value is not None]
         QMessageBox.information(self, Path(path).name, "\n".join(lines))
 
+    def _mismatch_help(self, payload: bytes, exc: Exception) -> str:
+        """Explain a source-checksum mismatch concretely."""
+        import zlib
+
+        rom = self.state.rom
+        lines = [str(exc), ""]
+        loaded = zlib.crc32(rom.original) & 0xFFFFFFFF
+        lines.append(f"The ROM you have loaded has CRC32 {loaded:08X}.")
+        try:
+            described = PatchBuilder.describe(payload)
+            expected = described.get("source_crc32")
+            if expected:
+                lines.append(f"This patch expects a source ROM with CRC32 {expected}.")
+            if described.get("source_size") and described["source_size"] != rom.size:
+                lines.append(
+                    f"It also expects a {described['source_size']:,} byte ROM; "
+                    f"yours is {rom.size:,} bytes."
+                )
+        except PatchError:
+            pass
+        lines += [
+            "",
+            "That usually means the patch was built against a different dump "
+            "\u2014 another region, revision, or an already-modified ROM.",
+        ]
+        return "\n".join(lines)
+
     def apply_patch(self) -> None:
         if not self.state.rom.is_loaded:
             QMessageBox.information(
@@ -300,9 +328,34 @@ class PatchPage(Page):
         path, _ = QFileDialog.getOpenFileName(self, "Import patch", "", PATCH_FILTER)
         if not path:
             return
+
+        rom = self.state.rom
+        # A patch's source is the ROM *as loaded*, never the working copy.
+        # Applying it on top of your own edits is what a patch is defined not
+        # to mean: a BPS would fail its source checksum, and an IPS would
+        # quietly look like a no-op because the edits are already the target.
+        if rom.is_modified:
+            answer = QMessageBox.question(
+                self,
+                "Replace your current edits?",
+                "A patch applies to the ROM as it was loaded, not on top of "
+                "your edits.\n\nApplying it will replace the working copy with "
+                "the original ROM plus this patch. Your unsaved changes will be "
+                "undone (Ctrl+Z brings them back).\n\nContinue?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if answer != QMessageBox.Yes:
+                return
+
         try:
             payload = Path(path).read_bytes()
-            patched = PatchBuilder.apply(bytes(self.state.rom.data), payload)
+            patched = PatchBuilder.apply(rom.original, payload)
+        except PatchMismatchError as exc:
+            QMessageBox.critical(
+                self, "This patch is for a different ROM", self._mismatch_help(payload, exc)
+            )
+            return
         except (PatchError, OSError) as exc:
             QMessageBox.critical(self, "Could not apply patch", str(exc))
             return
@@ -317,11 +370,14 @@ class PatchPage(Page):
             )
             return
 
-        current = bytes(self.state.rom.data)
+        current = bytes(rom.data)
         ranges = diff_buffers(current, patched, merge_gap=16)
         if not ranges:
             QMessageBox.information(
-                self, "Apply patch", "The patch makes no change to this ROM."
+                self,
+                "Nothing to do",
+                "The working copy already matches this patch exactly, so there "
+                "is nothing to apply.",
             )
             return
 

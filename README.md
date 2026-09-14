@@ -91,6 +91,20 @@ python -m pytest
 The Qt smoke tests run headless (`QT_QPA_PLATFORM=offscreen`) and skip
 themselves if PySide6 cannot start.
 
+The unit tests use a small synthetic ROM, so they can run anywhere. For the
+other half — the real application driven against a real cartridge — point the
+functional audit at your own dump:
+
+```bash
+python -m tools.audit "NFL Blitz (USA).z64"
+```
+
+It builds the actual main window and works through 15 areas the way a person
+would: loading and identifying the ROM, editing a team, filtering and editing
+the roster, hex editing, searching, bookmarking and promoting a bookmark to a
+definition entry, diffing, GameShark codes, building a patch and applying it
+back, saving and reloading, and undo. It exits non-zero if any check fails.
+
 ---
 
 ## Project layout
@@ -131,6 +145,7 @@ tools/                      Research and analysis, no Qt
   pointer_finder.py         Candidate references to an address
   research.py               The experiment log (Research Mode)
   make_demo_rom.py          Builds the synthetic demo cartridge
+  audit.py                  End-to-end audit of the app against a real ROM
 
 ui/                         Everything Qt
   theme.py                  Dark palette and stylesheet

@@ -1,4 +1,41 @@
-# NFL Blitz Mod Suite 0.1.1 — preview
+# NFL Blitz Mod Suite 0.1.2 — preview
+
+## Fixed in 0.1.2
+
+**You could build a patch but not apply it.** Creating a patch worked,
+inspecting it worked, applying it failed — a BPS reported *"this patch is for
+a different ROM"* and an IPS silently reported *"makes no change"*.
+
+Cause: **Apply Patch** ran the patch against your *working copy* — the ROM
+with your edits already in it — instead of against the ROM as loaded. A patch
+records the difference from an original, so feeding it a file that already
+contains those edits is the one input guaranteed not to match. Patches now
+apply to the ROM as loaded, which is what every other patcher does.
+
+Two related improvements came out of it:
+
+- **If a patch really is for a different ROM, it now says so precisely** —
+  the CRC32 the patch expects, the CRC32 of the ROM you have open, and what
+  that means. Before, you got a bare mismatch error with nothing to act on.
+- **Applying a patch over unsaved edits asks first.** Applying replaces the
+  working copy, so edits you have not saved would be discarded silently. It
+  now warns and lets you cancel.
+
+Regression tests build a patch through the UI and apply it back, in both
+formats — verified to fail on the old code and pass on the new.
+
+**A full functional audit.** `python -m tools.audit "NFL Blitz (USA).z64"`
+builds the real main window and works through all 15 areas of the app against
+a real cartridge — 48 checks covering ROM loading, both editors, search,
+bookmarks, comparison, GameShark, patches, save/reload, and undo. All 48 pass.
+Unit tests: 281 passing.
+
+The audit also confirms what is *not* claimed: the Graphics, Gameplay, Physics
+and Passing editors report their entries as undiscovered and refuse to write,
+and the Team Editor shows no colour swatches because NFL Blitz team colours
+have not been located.
+
+---
 
 ## Fixed in 0.1.1
 

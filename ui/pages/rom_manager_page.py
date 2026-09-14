@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Optional
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QComboBox,
@@ -16,6 +17,7 @@ from PySide6.QtWidgets import (
     QPushButton,
 )
 
+from core.rom_validator import ValidationReport
 from ui import theme
 from ui.pages.base_page import Page, card, hint
 
@@ -168,13 +170,18 @@ class ROMManagerPage(Page):
         if path:
             self.load_rom(path)
 
-    def load_rom(self, path: str) -> None:
-        """Load a ROM and offer a backup, reporting any problem clearly."""
+    def load_rom(self, path: str) -> Optional[ValidationReport]:
+        """Load a ROM and offer a backup, reporting any problem clearly.
+
+        Returns the load report, or ``None`` if the file could not be opened,
+        so that a caller can tell the two apart.  The user sees the warnings
+        either way: they are listed in the status panel below.
+        """
         try:
             report = self.state.load_rom(path)
         except Exception as exc:  # surfaced to the user rather than swallowed
             QMessageBox.critical(self, "Could not open ROM", str(exc))
-            return
+            return None
 
         if self.state.settings.get("auto_backup_on_load", True):
             self._offer_backup(path)
@@ -185,6 +192,7 @@ class ROMManagerPage(Page):
             + (f" with {warning_count} warning(s)" if warning_count else ""),
             6000,
         )
+        return report
 
     def _offer_backup(self, path: str) -> None:
         if self.state.backups.has_backup_of(path):
